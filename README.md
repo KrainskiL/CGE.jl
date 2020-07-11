@@ -53,6 +53,19 @@ julia CGE_CLI.jl -g edgelist_file -c clusters_file -e embedding_file [-a -v] [-l
 -m: chosen ladnmark creation method: `rss`, `rss2`, `size`, `diamater`
 ```
 
+For instance, while in `example` folder run
+
+```julia
+julia CGE_CLI.jl -g 100k.edgelist -c 100k.ecg -e 100k.embedding -l 200 -f 0 -m diameter
+```
+Result consists of 4 element:
+1. Best alpha
+2. Best divergence score
+3. Best divergence external score
+4. Best divergence internal score
+```
+[0.25, 0.01483964683262605, 0.026810577776668364, 0.002868715888583737]
+```
 # File Formats
 
 For a graph with n nodes, the nodes can be represented with numbers 1 to n or 0 to n-1.
