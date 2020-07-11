@@ -71,7 +71,7 @@ function parseargs()
         verbose = !isnothing(findfirst(==("-v"),ARGS)) ? true : false
 
         # Check for required arguments: -g graph_edgelist -c communities -e embedding -o outfile
-        @assert length(ARGS) >= 8
+        @assert length(ARGS) >= 6
 
         # Load obligatory files
         ################
@@ -79,7 +79,7 @@ function parseargs()
         ################
 
         idx = findfirst(==("-g"),ARGS)
-        @assert !isnothing(idx)
+        @assert !isnothing(idx) "Edges list file is required"
         fn_edges = ARGS[idx+1]
 
         # read edges
@@ -125,7 +125,7 @@ function parseargs()
         ################
 
         idx = findfirst(==("-c"),ARGS)
-        @assert !isnothing(idx)
+        @assert !isnothing(idx) "Communities file is required"
         fn_comm = ARGS[idx+1]
 
         # Read communities
@@ -149,7 +149,7 @@ function parseargs()
         ##############
 
         idx = findfirst(==("-e"),ARGS)
-        @assert !isnothing(idx)
+        @assert !isnothing(idx) "Embedding file is required"
         fn_embed = ARGS[idx+1]
 
         # Read embedding
@@ -167,9 +167,9 @@ function parseargs()
         #####################
         ## Output file name #
         #####################
-        idx = findfirst(==("-o"),ARGS)
-        @assert !isnothing(idx)
-        outfile = ARGS[idx+1]
+        # idx = findfirst(==("-o"),ARGS)
+        # @assert !isnothing(idx)
+        # outfile = ARGS[idx+1]
 
         #############
         ##Landmarks #
@@ -191,18 +191,17 @@ function parseargs()
         idx = findfirst(==("-f"),ARGS)
         forced = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
         idx = findfirst(==("-m"),ARGS)
-        method_str = !isnothing(idx) ? lowercase(strip(ARGS[idx+1])) : nothing
-        method = !isnothing(method_str) ? methods[method_str] : nothing
-        return edges, eweights, vweight, comm, clusters, embedding, outfile, asis, verbose, landmarks, forced, method
+        method_str = !isnothing(idx) ? lowercase(strip(ARGS[idx+1])) : "rss"
+        method = methods[method_str]
+        return edges, eweights, vweight, comm, clusters, embedding, asis, verbose, landmarks, forced, method
     catch e
         showerror(stderr, e)
         println("\n\nUsage:")
-        println("\tjulia CGE.jl -g graph_edgelist -c communities -e embedding -o outfile [-a -v] [-l landmarks -f forced -m method]")
+        println("\tjulia CGE.jl -g graph_edgelist -c communities -e embedding [-a -v] [-l landmarks -f forced -m method]")
         println("\nParameters:")
         println("graph_edgelist: rows should contain two vertices ids (edge) and optional weights")
         println("communities: rows should contain cluster identifiers of consecutive vertices")
         println("embedding: rows should contain whitespace separated locations of vertices in embedding")
-        println("outfile: output file name")
         println("-a: flag for sorting embedding")
         println("-v: flag for debugging messages")
         println("landmarks: required number of landmarks")
@@ -230,8 +229,8 @@ function parseargs(ARGS::Vector{String})
         # Check if calculations should be verbose
         verbose = !isnothing(findfirst(==("-v"),ARGS)) ? true : false
 
-        # Check for required arguments: -g graph_edgelist -c communities -e embedding -o outfile
-        @assert length(ARGS) >= 8
+        # Check for required arguments: -g graph_edgelist -c communities -e embedding
+        @assert length(ARGS) >= 6
 
         # Load obligatory files
         ################
@@ -327,9 +326,9 @@ function parseargs(ARGS::Vector{String})
         #####################
         ## Output file name #
         #####################
-        idx = findfirst(==("-o"),ARGS)
-        @assert !isnothing(idx)
-        outfile = ARGS[idx+1]
+        # idx = findfirst(==("-o"),ARGS)
+        # @assert !isnothing(idx)
+        # outfile = ARGS[idx+1]
 
         #############
         ##Landmarks #
@@ -351,18 +350,17 @@ function parseargs(ARGS::Vector{String})
         idx = findfirst(==("-f"),ARGS)
         forced = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
         idx = findfirst(==("-m"),ARGS)
-        method_str = !isnothing(idx) ? lowercase(strip(ARGS[idx+1])) : nothing
-        method = !isnothing(method_str) ? methods[method_str] : nothing
-        return edges, eweights, vweight, comm, clusters, embedding, outfile, asis, verbose, landmarks, forced, method
+        method_str = !isnothing(idx) ? lowercase(strip(ARGS[idx+1])) : "rss"
+        method = methods[method_str]
+        return edges, eweights, vweight, comm, clusters, embedding, asis, verbose, landmarks, forced, method
     catch e
         showerror(stderr, e)
         println("\n\nUsage:")
-        println("\tjulia CGE.jl -g graph_edgelist -c communities -e embedding -o outfile [-a -v] [-l landmarks -f forced -m method]")
+        println("\tjulia CGE.jl -g graph_edgelist -c communities -e embedding [-a -v] [-l landmarks -f forced -m method]")
         println("\nParameters:")
         println("graph_edgelist: rows should contain two vertices ids (edge) and optional weights")
         println("communities: rows should contain cluster identifiers of consecutive vertices")
         println("embedding: rows should contain whitespace separated locations of vertices in embedding")
-        println("outfile: output file name")
         println("-a: flag for sorting embedding")
         println("-v: flag for debugging messages")
         println("landmarks: required number of landmarks")
