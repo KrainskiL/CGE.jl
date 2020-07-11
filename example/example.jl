@@ -1,6 +1,6 @@
 using CGE
 
-ARGS=["-g","example/100k.edgelist","-c","example/100k.ecg","-e","example/100k.embedding","-o","testfile","-l","200","-f","1","-m","rss"];
+ARGS=["-g","example/100k.edgelist","-c","example/100k.ecg","-e","example/100k.embedding","-l","200","-f","0","-m","diameter"];
 edges, weights, vweights, comm, clusters, embed, asis, verbose, land, forced, method = parseargs(ARGS)
 distances = zeros(length(vweights))
 if land != -1

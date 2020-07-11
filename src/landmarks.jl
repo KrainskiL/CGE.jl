@@ -370,8 +370,6 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
         lweight[what]+=1
         for j in 1:dim
             embed[what,j]+=embedding[i,j]
-            if j==1 && 4 in what
-            end
         end
     end
 
@@ -416,14 +414,13 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
     end
 
     # re-write
-    landmark_edges = Array{Int}(undef, 0, 3)
+    landmark_edges = Array{Int}(undef, Int(N*(N+1)/2), 3)
     for i in 1:N
         for j in i:N
-            if wedges[i,j]>0
-                landmark_edges = [landmark_edges;[i j wedges[i,j]]]
-            end
+            landmark_edges[CGE.idx(N,i,j),:] = [i j wedges[i,j]]
         end
     end
+    landmark_edges = landmark_edges[landmark_edges[:,3] .>0,:]
     weights = Float64.(landmark_edges[:,3])
     landmark_edges = landmark_edges[:,1:2]
 
