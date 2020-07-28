@@ -28,6 +28,12 @@ The current version uses Julia 1.4. Install `CGE.jl` by running in Julia REPL:
 ```julia
 ] add https://github.com/KrainskiL/CGE.jl
 ```
+After installation, you can access CLI file easily by downloading repository.
+```shell
+git clone https://github.com/KrainskiL/CGE.jl
+mv CGE.jl/example/CGE_CLI.jl .
+julia CGE_CLI.jl
+```
 
 # Running the code
 
