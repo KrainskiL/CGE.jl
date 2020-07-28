@@ -24,11 +24,22 @@ Framework version without landmarks (written in C) is available under: https://g
 
 ## Installation
 
-The current version uses Julia 1.4. Install `CGE.jl` by running in Julia REPL:
-```julia
-] add https://github.com/KrainskiL/CGE.jl
+The current version uses Julia 1.4. Install `CGE.jl` by running Julia, switching to package manager by pressing `]` and running:
 ```
-After installation, you can access CLI file easily by downloading repository.
+add https://github.com/KrainskiL/CGE.jl
+```
+
+In order to use the CLI for the package you should locate CGE_CLI.jl file after the installation.
+
+The directory with CGE_CLI.jl file and example files can be found by running the following command in Julia:
+```julia
+using CGE; cd(pwd, joinpath(dirname(pathof(CGE)), "..", "example"))
+```
+Make sure to copy the CLI file from this location (as it is read only).
+
+Alternatively you can just download CGE_CLI.jl from GitHub repository. It is located in example/ folder
+
+Finally you might also download the whole repository and extract the CGE_CLI.jl file from it.
 ```shell
 git clone https://github.com/KrainskiL/CGE.jl
 mv CGE.jl/example/CGE_CLI.jl .
