@@ -13,8 +13,8 @@ Julia package to compare graph embeddings.
 [travis-img]: https://travis-ci.org/KrainskiL/CGE.jl.svg?branch=master
 [travis-url]: https://travis-ci.org/KrainskiL/CGE.jl
 
-[codecov-img]: https://coveralls.io/repos/github/KrainskiL/CGE.jl/badge.svg?branch=master
-[codecov-url]: https://coveralls.io/github/KrainskiL/CGE.jl?branch=master
+[codecov-img]: https://codecov.io/gh/KrainskiL/CGE.jl/branch/master/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/KrainskiL/CGE.jl
 
 ## Details of the framework
 
