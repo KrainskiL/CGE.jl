@@ -157,11 +157,14 @@ function split_cluster_rss(m, w)
     y = (m .- matrix_w_mean(m, w)) .* sqrt.(w)
     yᵀwy = transpose(y) * y
     z = y * (@view eigvecs(yᵀwy)[:, end])
-    l1 = Int[]
-    l2 = Int[]
-    gray = [axes(z, 1);]
-    rss_low = [WSSE(0.0, 0.0, 0.0) for i in axes(m, 2)]
-    rss_high = [WSSE(0.0, 0.0, 0.0) for i in axes(m, 2)]
+    l1 = Int[argmin(z)]
+    l2 = Int[argmax(z)]
+    if l1 == l2
+        throw(ErrorException("Trying to split homogenous cluster"))
+    end
+    gray = setdiff(axes(z, 1), l1, l2)
+    rss_low = [WSSE(m[l1[1],i]^2*w[l1[1]], m[l1[1],i]*w[l1[1]], w[l1[1]]) for i in axes(m, 2)]
+    rss_high = [WSSE(m[l2[1],i]^2*w[l2[1]], m[l2[1],i]*w[l2[1]], w[l2[1]]) for i in axes(m, 2)]
     med = median(z)
     t1 = Int[]
     t2 = Int[]
@@ -417,7 +420,7 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
     landmark_edges = Array{Int}(undef, Int(N*(N+1)/2), 3)
     for i in 1:N
         for j in i:N
-            landmark_edges[CGE.idx(N,i,j),:] = [i j wedges[i,j]]
+            landmark_edges[idx(N,i,j),:] = [i j wedges[i,j]]
         end
     end
     landmark_edges = landmark_edges[landmark_edges[:,3] .>0,:]

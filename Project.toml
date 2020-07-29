@@ -1,7 +1,7 @@
 name = "CGE"
 uuid = "f7ff1d1e-e254-4b26-babe-fc3421add060"
 authors = ["KrainskiL <lukasz.krainski123@gmail.com>"]
-version = "1.0.0"
+version = "1.0.1"
 
 [deps]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
