@@ -70,8 +70,8 @@ function parseargs()
         # Check if calculations should be verbose
         verbose = !isnothing(findfirst(==("-v"),ARGS)) ? true : false
 
-        # Check for required arguments: -g graph_edgelist -c communities -e embedding -o outfile
-        @assert length(ARGS) >= 6
+        # Check for required arguments: -g graph_edgelist -e embedding
+        @assert length(ARGS) >= 4
 
         # Load obligatory files
         ################
@@ -125,9 +125,12 @@ function parseargs()
         ################
 
         idx = findfirst(==("-c"),ARGS)
-        @assert !isnothing(idx) "Communities file is required"
-        fn_comm = ARGS[idx+1]
-
+        if !isnothing(idx)
+            fn_comm = ARGS[idx+1]
+        else
+            louvain(fn_edges)
+            fn_comm = fn_edges*".ecg"
+        end
         # Read communities
         comm = readdlm(fn_comm,Int)
         comm_rows, no_cols = size(comm)
@@ -197,10 +200,11 @@ function parseargs()
     catch e
         showerror(stderr, e)
         println("\n\nUsage:")
-        println("\tjulia CGE.jl -g graph_edgelist -c communities -e embedding [-a -v] [-l landmarks -f forced -m method]")
+        println("\tjulia CGE.jl -g graph_edgelist -e embedding [-c communities] [-a -v] [-l landmarks -f forced -m method]")
         println("\nParameters:")
         println("graph_edgelist: rows should contain two vertices ids (edge) and optional weights")
         println("communities: rows should contain cluster identifiers of consecutive vertices")
+        println("if no file is given communities are calculated with Louvain algorithm")
         println("embedding: rows should contain whitespace separated locations of vertices in embedding")
         println("-a: flag for sorting embedding")
         println("-v: flag for debugging messages")
