@@ -56,13 +56,13 @@ When comparing embeddings, lower divergence is better.
 Format:
 
 ```
-julia CGE_CLI.jl -g edgelist_file -c clusters_file -e embedding_file [-a -v] [-l landmarks -f forced -m method]
+julia CGE_CLI.jl -g edgelist_file -e embedding_file [-c clusters_file] [-a -v] [-l landmarks -f forced -m method]
 
 ## required flags:
 -g: the edgelist (1 per line, whitespace separated, optionally with weights)
--c: the communities (in vertices order, 1 per line)
 -e: the embedding (two formats accepted, see details below)
 ## optional flags:
+-c: the communities (in vertices order, 1 per line), if not given calculated using Louvain algorithm
 -a: 'asis' flag, use if embedding is provided unordered with vertices in first column
 -v: verbose, printing additional information
 -l: number of landmarks to create
@@ -131,6 +131,7 @@ Additional weights may be provided in third column
 
 Clusters can be 0-based or 1-based
 Clusters: one value per line in the numerical order of the nodes
+If not provided, clusters will be automatically calculated with Louvain algorithm
 
 ```
 1
