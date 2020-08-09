@@ -1,8 +1,10 @@
 using Test
 using CGE
 
-argslist=["-g","test.edgelist","-c","test.ecg","-e","test.embedding","-l","20","-f","1","-m","rss"];
-edges, weights, vweights, comm, clusters, embed, asis, verbose, land, forced, method = parseargs(argslist)
+for e in ["-g","test.edgelist","-c","test.ecg","-e","test.embedding","-l","20","-f","1","-m","rss"]
+    push!(Base.ARGS,e)
+end
+edges, weights, vweights, comm, clusters, embed, asis, verbose, land, forced, method = parseargs()
 
 @testset "parsing" begin
 
@@ -27,27 +29,71 @@ edges, weights, vweights, comm, clusters, embed, asis, verbose, land, forced, me
 
 end
 
-distances, embed, comm, edges, weights  = landmarks(edges, weights, vweights, clusters, comm,
+distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
 embed, verbose, land, forced, method);
 
-@testset "landmarks" begin
+@testset "landmarks-rss" begin
 
-@test typeof(edges) == Array{Int,2}
-@test minimum(edges) == 1
+    @test typeof(ledges) == Array{Int,2}
+    @test minimum(ledges) == 1
+    @test typeof(lweights) == Array{Float64,1}
+    @test typeof(lcomm) == Array{Int,2}
+    @test size(lcomm,2) == 1
+    @test typeof(distances) == Array{Float64,1}
+end
 
-@test typeof(weights) == Array{Float64,1}
+distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
+embed, verbose, land, forced, CGE.split_cluster_rss2);
 
-@test typeof(comm) == Array{Int,2}
-@test size(comm,2) == 1
+@testset "landmarks-rss2" begin
 
+@test typeof(ledges) == Array{Int,2}
+@test minimum(ledges) == 1
+@test typeof(lweights) == Array{Float64,1}
+@test typeof(lcomm) == Array{Int,2}
+@test size(lcomm,2) == 1
 @test typeof(distances) == Array{Float64,1}
 end
 
-results = wGCL(edges, weights, comm, embed, distances, verbose);
+distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
+embed, verbose, land, forced, CGE.split_cluster_size);
+
+@testset "landmarks-size" begin
+
+@test typeof(ledges) == Array{Int,2}
+@test minimum(ledges) == 1
+@test typeof(lweights) == Array{Float64,1}
+@test typeof(lcomm) == Array{Int,2}
+@test size(lcomm,2) == 1
+@test typeof(distances) == Array{Float64,1}
+end
+
+distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
+embed, verbose, land, forced, CGE.split_cluster_diameter);
+
+@testset "landmarks-diameter" begin
+
+@test typeof(ledges) == Array{Int,2}
+@test minimum(ledges) == 1
+@test typeof(lweights) == Array{Float64,1}
+@test typeof(lcomm) == Array{Int,2}
+@test size(lcomm,2) == 1
+@test typeof(distances) == Array{Float64,1}
+end
+
+results = wGCL(ledges, lweights, lcomm, lembed, distances, verbose);
 
 @testset "wgcl" begin
 
 @test typeof(results) == Array{Float64,1}
 @test results[1] <=10.0
 
+end
+
+louvain("test.edgelist")
+
+@testset "clustering" begin
+
+@test isfile("test.edgelist.ecg")
+isfile("test.edgelist.ecg") && rm("test.edgelist.ecg")
 end
