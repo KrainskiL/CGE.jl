@@ -91,6 +91,9 @@ Retained for testing purposes.
 """
 function split_cluster_rss2(m, w)
     @assert size(m, 1) > 1
+    if size(m, 1) == 2
+        return [1], [2]
+    end
     y = (m .- matrix_w_mean(m, w)) .* sqrt.(w)
     yᵀwy = transpose(y) * y
     z = y * (@view eigvecs(yᵀwy)[:, end])
@@ -214,6 +217,9 @@ component so as to make the clusters have equal size (number of edges).
 """
 function split_cluster_size(m, w)
     @assert size(m, 1) > 1
+    if size(m, 1) == 2
+        return [1], [2]
+    end
     y = (m .- matrix_w_mean(m, w)) .* sqrt.(w)
     yᵀwy = transpose(y) * y
     z = y * (@view eigvecs(yᵀwy)[:, end])
@@ -222,7 +228,11 @@ function split_cluster_size(m, w)
     low = Int[]
     high = Int[]
     for (i, c) in enumerate(z)
-        push!(c < med ? low : high, i)
+        if c == med
+            push!(length(low) < length(high) ? low : high, i)
+        else
+            push!(c < med ? low : high, i)
+        end
     end
     return low, high
 end
@@ -236,6 +246,9 @@ the first principal component.
 """
 function split_cluster_diameter(m, w)
     @assert size(m, 2) > 1
+    if size(m, 1) == 2
+        return [1], [2]
+    end
     y = (m .- matrix_w_mean(m, w)) .* sqrt.(w)
     yᵀwy = transpose(y) * y
     z = y * (@view eigvecs(yᵀwy)[:, end])
@@ -244,7 +257,11 @@ function split_cluster_diameter(m, w)
     low = Int[]
     high = Int[]
     for (i, c) in enumerate(z)
-        push!(c < avg ? low : high, i)
+        if c == avg
+            push!(length(low) < length(high) ? low : high, i)
+        else
+            push!(c < avg ? low : high, i)
+        end
     end
     return low, high
 end
@@ -349,10 +366,11 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
 
     verbose && println("Starts landmark generation")
     rows_embed, dim = size(embedding)
+    unique_rows = size(unique(embedding, dims=1), 1) #performance 0.5 sec for 100k vertices
 
-    if land > rows_embed
-        @warn "Requested number of clusters larger than number of vertices. Truncating."
-        land = rows_embed
+    if land > unique_rows
+        @warn "Requested number of clusters larger than unique no. embeddings. Truncating to $unique_rows landmarks."
+        land = unique_rows
     end
 
     landmarks = runsplit(embedding, vweights, clusters, land, forced, method)
