@@ -32,3 +32,9 @@ dist
 JS
 idx
 ```
+
+Clustering
+----------------------
+```@docs
+louvain_clust
+```
