@@ -3,6 +3,7 @@ module CGE
 using DelimitedFiles
 using Statistics
 using LinearAlgebra
+using louvain_jll
 
 #auxilary
 export parseargs
@@ -14,7 +15,7 @@ export landmarks
 export wGCL
 
 #clustering
-export louvain
+export louvain_clust
 
 # Include package code
 include("auxilary.jl")

@@ -90,10 +90,13 @@ results = wGCL(ledges, lweights, lcomm, lembed, distances, verbose);
 
 end
 
-louvain("test.edgelist")
-
 @testset "clustering" begin
 
+louvain_clust("test.edgelist")
 @test isfile("test.edgelist.ecg")
 isfile("test.edgelist.ecg") && rm("test.edgelist.ecg")
+
+louvain_clust("testw.edgelist",edges, weights)
+@test isfile("testw.edgelist.ecg")
+isfile("testw.edgelist.ecg") && rm("testw.edgelist.ecg")
 end
