@@ -128,7 +128,7 @@ function parseargs()
             fn_comm = ARGS[idx+1]
             comm = readdlm(fn_comm,Int)
         else
-            no_cols == 2 ? louvain(fn_edges,) : louvain(fn_edges, edges, eweights)
+            no_cols == 2 ? louvain_clust(fn_edges,) : louvain_clust(fn_edges, edges, eweights)
             fn_comm = fn_edges*".ecg"
             comm = readdlm(fn_comm,Int)
             comm = comm[2:end,2]
