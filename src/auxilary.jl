@@ -58,6 +58,10 @@ function idx(n::Int, i::Int, j::Int)
   return n*(i-1) - (i-1)*(i-2) ÷ 2 +j-i+1
 end
 
+function idx2(n::Int, i::Int, j::Int)
+    return n*(i-1)-(i-1)*i ÷ 2+j-i
+end
+
 function parseargs()
     methods = Dict("rss" => split_cluster_rss,
                    "rss2" => split_cluster_rss2,
@@ -65,7 +69,9 @@ function parseargs()
                    "diameter" => split_cluster_diameter)
     try
         # Check if calculations should be verbose
-        verbose = !isnothing(findfirst(==("-v"),ARGS))
+        verbose = !isnothing(findfirst(==("-v"),ARGS)) ? true : false
+        # Check if provided graph is directed
+        directed = !isnothing(findfirst(==("-d"),ARGS)) ? true : false
 
         #############
         ## Edgelist #
@@ -202,18 +208,19 @@ function parseargs()
         method_str = !isnothing(idx) ? lowercase(strip(ARGS[idx+1])) : "rss"
 
         method = methods[method_str]
-        return edges, eweights, vweight, comm, clusters, embedding, verbose, landmarks, forced, method
+        return edges, eweights, vweight, comm, clusters, embedding, verbose, landmarks, forced, method, directed
     catch e
         showerror(stderr, e)
         println("\n\nUsage:")
-        println("\tjulia CGE.jl -g graph_edgelist -e embedding [-c communities] [-a -v] [-l landmarks -f forced -m method]")
+        println("\tjulia CGE_CLI.jl -g graph_edgelist -e embedding [-c communities] [-a -v -d] [-l landmarks -f forced -m method]")
         println("\nParameters:")
         println("graph_edgelist: rows should contain two vertices ids (edge) and optional weights in third column")
         println("communities: rows should contain cluster identifiers of consecutive vertices with optional node ids in first column")
         println("if no file is given communities are calculated with Louvain algorithm")
-        println("embedding: rows should contain whitespace separated embedding values with optional node ids in first column")
+        println("embedding: rows should contain whitespace separated locations of vertices in embedding")
         println("-v: flag for debugging messages")
-        println("landmarks: number of landmarks")
+        println("-d: flag for usage of directed framework")
+        println("landmarks: required number of landmarks")
         println("forced: required maximum number of forced splits of a cluster")
         println("method: one of:")
         println("\t* rss:      minimize maximum residual sum of squares when doing a cluster split")

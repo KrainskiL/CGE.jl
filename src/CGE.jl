@@ -13,6 +13,7 @@ export landmarks
 
 #divergence
 export wGCL
+export wGCL_directed
 
 #clustering
 export louvain_clust
