@@ -219,35 +219,35 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     # Loop over alpha's
 
     # Compute Euclidean distance vector D[] given embed and alpha
-    p_len = no_vertices*(no_vertices-1) ÷ 2
+    p_len = no_vertices*(no_vertices+1) ÷ 2
     D = zeros(Float64, p_len)
-    for i in 1:(no_vertices-1)
-        for j in (i+1):no_vertices
+    for i in 1:no_vertices
+        for j in i:no_vertices
             f = dist(i,j,embed)
-            k = idx2(no_vertices, i, j)
+            k = idx(no_vertices, i, j)
             D[k] = f
         end
     end
-    # lo1, hi1 = extrema(D)
-    # Read distances
-    # @assert size(distances,1) == no_vertices
-    # for i in 1:no_vertices
-    #     f = distances[i]
-    #     k = idx2(no_vertices, i, i)
-    #     D[k] = f
-    # end
-    # lo2, hi2 = extrema(D)
-    # lo,hi = extrema([lo1,lo2,hi1,hi2])
-    lo,hi = extrema(D)
+    lo1, hi1 = extrema(D)
+    #Read distances
+    @assert size(distances,1) == no_vertices
+    for i in 1:no_vertices
+        f = distances[i]
+        k = idx(no_vertices, i, i)
+        D[k] = f
+    end
+    lo2, hi2 = extrema(D)
+    lo,hi = extrema([lo1,lo2,hi1,hi2])
+    # lo,hi = extrema(D)
     # Loop here - exclude Alpha = 0
  
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
 
         # Apply kernel (g(dist))
         GD = zeros(Float64, p_len)
-        for i in 1:(no_vertices-1)
-            for j in (i+1):no_vertices
-                k = idx2(no_vertices,i,j)
+        for i in 1:no_vertices
+            for j in i:no_vertices
+                k = idx(no_vertices,i,j)
                 GD[k] = (D[k]-lo)/(hi-lo) # normalize to [0,1]
                 GD[k] = (1-GD[k])^alpha # transform w.r.t. alpha
             end
@@ -263,16 +263,16 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             Sin = zeros(no_vertices)
             Sout = zeros(no_vertices)
             verbose && println("diff1 = $diff")
-            k=1
-            for i in 1:(no_vertices-1)
-                for j in (i+1):no_vertices   
+            k=0
+            for i in 1:no_vertices
+                for j in i:no_vertices   
+                    k = idx(no_vertices, i, j)
                     tmp = Tin[i]*Tout[j]*GD[k]
                     Sin[i] += tmp
                     Sin[j] += tmp
                     tmp = Tout[i]*Tin[j]*GD[k]
                     Sout[i] += tmp
                     Sout[j] += tmp
-                    k += 1
                 end
             end          
             
@@ -301,7 +301,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                     k = (no_vertices-1)*(i-1)+j-Int(j>i)
                     a = min(i,j)
                     b = max(i,j)
-                    l = idx2(no_vertices,a,b)
+                    l = idx(no_vertices,a,b)
                     P[k] = Tin[i]*Tout[j]*GD[l]
                 end
             end
@@ -317,7 +317,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                 end
             end
         end
-
+        
         x = JS(vect_C, vect_B, vect_I, true)
         y = JS(vect_C, vect_B, vect_I, false)
         f = (x+y)/2.0
