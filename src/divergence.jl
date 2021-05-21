@@ -267,12 +267,10 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             for i in 1:no_vertices
                 for j in i:no_vertices   
                     k = idx(no_vertices, i, j)
-                    tmp = Tin[i]*Tout[j]*GD[k]
-                    Sin[i] += tmp
-                    Sin[j] += tmp
-                    tmp = Tout[i]*Tin[j]*GD[k]
-                    Sout[i] += tmp
-                    Sout[j] += tmp
+                    Sin[i] += Tin[i]*Tout[j]*GD[k]
+                    Sin[j] += Tin[j]*Tout[i]*GD[k]
+                    Sout[i] += Tout[i]*Tin[j]*GD[k]
+                    Sout[j] += Tout[j]*Tin[i]*GD[k]
                 end
             end          
             
