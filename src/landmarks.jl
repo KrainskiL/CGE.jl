@@ -428,22 +428,22 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
     cluster = reshape(cluster,:,1)
 
     # Output weighted landmark_edgelist
-    wedges = zeros(Int,N,N)
+    wedges = zeros(Float64,N,N)
     for i in 1:size(edges,1)
         a,b = extrema([landmarks[edges[i,1]],landmarks[edges[i,2]]])
         wedges[a,b] += weights[i]
     end
 
     # re-write
-    landmark_edges = Array{Int}(undef, Int(N*(N+1)/2), 3)
+    landmark_edges = Array{Float64}(undef, Int(N*(N+1)/2), 3)
     for i in 1:N
         for j in i:N
             landmark_edges[idx(N,i,j),:] = [i j wedges[i,j]]
         end
     end
     landmark_edges = landmark_edges[landmark_edges[:,3] .>0,:]
-    weights = Float64.(landmark_edges[:,3])
-    landmark_edges = landmark_edges[:,1:2]
+    weights = landmark_edges[:,3]
+    landmark_edges = Int.(landmark_edges[:,1:2])
 
     return dii, embed, cluster, landmark_edges, weights
 end

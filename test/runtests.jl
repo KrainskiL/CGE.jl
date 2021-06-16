@@ -1,10 +1,22 @@
 using Test
 using CGE
 
-for e in ["-g","test.edgelist","-c","test.ecg","-e","test.embedding","-l","20","-f","1","-m","rss"]
-    push!(Base.ARGS,e)
+for e in ["-g","test.edgelist","-c","test1col.ecg","-e","test_n2v.embedding","-l","20","-f","1","-m","rss"]
+    push!(ARGS,e)
 end
-edges, weights, vweights, comm, clusters, embed, asis, verbose, land, forced, method = parseargs()
+edges, weights, vweights, comm, clusters, embed, verbose, land, forced, method = parseargs()
+
+empty!(ARGS)
+for e in ["-g","test.edgelist","-c","test2col.ecg","-e","test_ordered.embedding","-l","20","-f","1","-m","rss"]
+    push!(ARGS,e)
+end
+edges, weights, vweights, comm, clusters, embed, verbose, land, forced, method = parseargs()
+
+empty!(ARGS)
+for e in ["-g","test_weights.edgelist","-c","test2col.ecg","-e","test_unordered.embedding","-l","20","-f","1","-m","rss"]
+    push!(ARGS,e)
+end
+edges, weights, vweights, comm, clusters, embed, verbose, land, forced, method = parseargs()
 
 @testset "parsing" begin
 
@@ -21,7 +33,6 @@ edges, weights, vweights, comm, clusters, embed, asis, verbose, land, forced, me
 @test typeof(clusters) == Vector{Vector{Int}}
 @test typeof(embed) == Array{Float64,2}
 
-@test typeof(asis) == Bool
 @test typeof(verbose) == Bool
 
 @test typeof(land) == Int
