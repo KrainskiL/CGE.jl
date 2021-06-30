@@ -61,7 +61,6 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
     best_alpha = -1.0
     dim = size(embed,2)
     verbose && println("Embedding has $dim dimensions")
-
     # Loop over alpha's
 
     # Compute Euclidean distance vector D[] given embed and alpha
@@ -84,11 +83,10 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
     end
     lo2, hi2 = extrema(D)
     lo,hi = extrema([lo1,lo2,hi1,hi2])
-
+    
     # Loop here - exclude Alpha = 0
     T = ones(no_vertices)
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
-
         # Apply kernel (g(dist))
         GD = zeros(Float64,p_len)
         for i in 1:no_vertices
@@ -100,10 +98,11 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
         end
         # Learn GCL model numerically
         diff = 1.0
+        count=0
         while diff > delta # stopping criterion
+            count +=1
             S = zeros(no_vertices)
             k = 0
-            verbose && println("diff1 = $diff")
             for i in 1:no_vertices
                 for j in i:no_vertices
                     k = idx(no_vertices, i, j)
@@ -112,7 +111,6 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
                     if i!=j S[j]+=tmp end
                 end
             end
-            verbose && println("diff2 = $diff")
             f = 0.0
             for i in 1:no_vertices
                 move = epsilon*T[i]*(degree[i]/S[i]-1.0)
@@ -120,7 +118,9 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
                 f = max(f,abs(degree[i]-S[i])) # convergence w.r.t. degrees
             end
             diff = f
+            verbose && println("diff $count = $diff")
         end
+        println(alpha,",",count)
         # Compute probas P[]
         P = zeros(Float64,p_len)
         for i in 1:no_vertices
@@ -206,43 +206,38 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
 
     # Indicator - internal to a community
     vect_I = falses(vect_len)
-    j=1
-    for i in 1:n_parts
-        vect_I[j] = true
-        j+=(n_parts+1)
+    for i in 1:(n_parts+1):vect_len
+        vect_I[i] = true
     end
     best_div = best_div_ext = best_div_int = typemax(Float64)
     best_alpha = -1.0
     dim = size(embed,2)
     verbose && println("Embedding has $dim dimensions")
-
     # Loop over alpha's
 
     # Compute Euclidean distance vector D[] given embed and alpha
     p_len = no_vertices*(no_vertices+1) ÷ 2
     D = zeros(Float64, p_len)
-    for i in 1:no_vertices
-        for j in i:no_vertices
-            f = dist(i,j,embed)
-            k = idx(no_vertices, i, j)
-            D[k] = f
-        end
-    end
-    lo1, hi1 = extrema(D)
     #Read distances
     @assert size(distances,1) == no_vertices
     for i in 1:no_vertices
-        f = distances[i]
-        k = idx(no_vertices, i, i)
-        D[k] = f
+        for j in i:no_vertices
+            l = idx(no_vertices, i, j)
+            if i == j 
+                D[l] = distances[i]
+            else
+                D[l] = dist(i,j,embed)
+            end
+        end
     end
-    lo2, hi2 = extrema(D)
-    lo,hi = extrema([lo1,lo2,hi1,hi2])
-    # lo,hi = extrema(D)
+    lo,hi = extrema(D)
     # Loop here - exclude Alpha = 0
- 
+    Tin = ones(no_vertices)
+    Tin[degree_in.==0] .= 0.0
+    Tout = ones(no_vertices)
+    Tout[degree_in.==0] .= 0.0   
+    
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
-
         # Apply kernel (g(dist))
         GD = zeros(Float64, p_len)
         for i in 1:no_vertices
@@ -253,69 +248,57 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             end
         end
         # Learn GCL model numerically
-        Tin = ones(no_vertices)
-        Tin[degree_in.==0] .= 0.0
-        Tout = ones(no_vertices)
-        Tout[degree_in.==0] .= 0.0   
         diff = 1.0
-
+        count = 0
         while diff > delta # stopping criterion
+            count += 1
             Sin = zeros(no_vertices)
             Sout = zeros(no_vertices)
-            verbose && println("diff1 = $diff")
-            k=0
             for i in 1:no_vertices
                 for j in i:no_vertices   
                     k = idx(no_vertices, i, j)
-                    Sin[i] += Tin[i]*Tout[j]*GD[k]
-                    Sin[j] += Tin[j]*Tout[i]*GD[k]
-                    Sout[i] += Tout[i]*Tin[j]*GD[k]
-                    Sout[j] += Tout[j]*Tin[i]*GD[k]
+                    tmp1 = Tin[i]*Tout[j]*GD[k]
+                    tmp2 = Tin[j]*Tout[i]*GD[k]
+                    Sin[i] += tmp1
+                    Sin[j] += tmp2
+                    Sout[i] += tmp2
+                    Sout[j] += tmp1
                 end
             end          
             
             f = 0.0
             for i in 1:no_vertices
                 if degree_in[i]>0
-                    move = epsilon*Tin[i]*(degree_in[i]/Sin[i]-1.0)
-                    Tin[i]+=move
+                    Tin[i] += epsilon*Tin[i]*(degree_in[i]/Sin[i]-1.0)
                     f = max(f,abs(degree_in[i]-Sin[i])) # convergence w.r.t. degrees
                 end
                 if degree_out[i]>0
-                    move = epsilon*Tout[i]*(degree_out[i]/Sout[i]-1.0)
-                    Tout[i]+=move
+                    Tout[i] += epsilon*Tout[i]*(degree_out[i]/Sout[i]-1.0)
                     f = max(f,abs(degree_out[i]-Sout[i])) # convergence w.r.t. degrees
                 end
             end
             diff = f
-            verbose && println("diff2 = $diff")
+            verbose && println("diff= $diff")
+            # epsilon *= 1.0001
         end
-
+        println(alpha,",",count)
         # Compute probas P[]
         P = zeros(Float64,2*p_len)
         for i in 1:no_vertices
             for j in 1:no_vertices
-                if i != j
-                    k = (no_vertices-1)*(i-1)+j-Int(j>i)
-                    a = min(i,j)
-                    b = max(i,j)
-                    l = idx(no_vertices,a,b)
-                    P[k] = Tin[i]*Tout[j]*GD[l]
-                end
+                a = min(i,j)
+                b = max(i,j)
+                P[no_vertices*(i-1)+j] = Tin[i]*Tout[j]*GD[idx(no_vertices,a,b)]
             end
         end
-
         # Compute B-vector given P[] and comm[]
         vect_B = zeros(vect_len)
         for i in 1:no_vertices
             for j in 1:no_vertices
-                if i != j
-                    m = (comm[i]-1)*n_parts + comm[j]
-                    vect_B[m] += P[(no_vertices-1)*(i-1)+j-Int(j>i)]
-                end
+                m = (comm[i]-1)*n_parts + comm[j]
+                vect_B[m] += P[no_vertices*(i-1)+j]
             end
         end
-        
         x = JS(vect_C, vect_B, vect_I, true)
         y = JS(vect_C, vect_B, vect_I, false)
         f = (x+y)/2.0

@@ -58,10 +58,6 @@ function idx(n::Int, i::Int, j::Int)
   return n*(i-1) - (i-1)*(i-2) ÷ 2 +j-i+1
 end
 
-function idx2(n::Int, i::Int, j::Int)
-    return n*(i-1)-(i-1)*i ÷ 2+j-i
-end
-
 function parseargs()
     methods = Dict("rss" => split_cluster_rss,
                    "rss2" => split_cluster_rss2,
