@@ -22,6 +22,7 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
     delta = 0.001
     AlphaMax = 10.0
     AlphaStep = 0.25
+    alpha_div_counter = 5
 
     no_vertices = maximum(edges)
     no_edges = size(edges,1)
@@ -47,8 +48,7 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
     for i in 1:no_edges
         a = weights[i]
         j,k = extrema([comm[edges[i,1]],comm[edges[i,2]]])
-        l = idx(n_parts, j, k)
-        vect_C[l] += a
+        vect_C[idx(n_parts, j, k)] += a
     end
     # Indicator - internal to a community
     vect_I = falses(vect_len)
@@ -66,24 +66,19 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
     # Compute Euclidean distance vector D[] given embed and alpha
     p_len = no_vertices*(no_vertices+1) ÷ 2
     D = zeros(Float64,p_len)
-    for i in 1:no_vertices
-        for j in i:no_vertices
-            f = dist(i,j,embed)
-            k = idx(no_vertices, i, j)
-            D[k] = f
-        end
-    end
-    lo1, hi1 = extrema(D)
-    # Read distances
     @assert size(distances,1) == no_vertices
     for i in 1:no_vertices
-        f = distances[i]
-        k = idx(no_vertices, i, i)
-        D[k] = f
+        for j in i:no_vertices
+            l = idx(no_vertices, i, j)
+            if i == j
+                D[l] = distances[i]
+            else
+                D[l] = dist(i,j,embed)
+            end
+        end
     end
-    lo2, hi2 = extrema(D)
-    lo,hi = extrema([lo1,lo2,hi1,hi2])
-    
+    lo,hi = extrema(D)
+
     # Loop here - exclude Alpha = 0
     T = ones(no_vertices)
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
@@ -98,15 +93,11 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
         end
         # Learn GCL model numerically
         diff = 1.0
-        count=0
         while diff > delta # stopping criterion
-            count +=1
             S = zeros(no_vertices)
-            k = 0
             for i in 1:no_vertices
                 for j in i:no_vertices
-                    k = idx(no_vertices, i, j)
-                    tmp = T[i]*T[j]*GD[k]
+                    tmp = T[i]*T[j]*GD[idx(no_vertices, i, j)]
                     S[i] += tmp
                     if i!=j S[j]+=tmp end
                 end
@@ -118,15 +109,13 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
                 f = max(f,abs(degree[i]-S[i])) # convergence w.r.t. degrees
             end
             diff = f
-            verbose && println("diff $count = $diff")
+            verbose && println("diff = $diff")
         end
-        println(alpha,",",count)
         # Compute probas P[]
         P = zeros(Float64,p_len)
         for i in 1:no_vertices
             for j in i:no_vertices
-                k = idx(no_vertices,i,j)
-                P[k] = T[i]*T[j]*GD[k]
+                P[k] = T[i]*T[j]*GD[idx(no_vertices,i,j)]
             end
         end
 
@@ -135,8 +124,7 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
         for i in 1:no_vertices
             for j in i:no_vertices
                 k,l = extrema([comm[i],comm[j]])
-                m = Int(n_parts*(k-1)-(k-1)*(k-2)/2+l-k+1)
-                vect_B[m] += P[idx(no_vertices,i,j)]
+                vect_B[Int(n_parts*(k-1)-(k-1)*(k-2)/2+l-k+1)] += P[idx(no_vertices,i,j)]
             end
         end
         x = JS(vect_C, vect_B, vect_I, true)
@@ -147,6 +135,9 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
             best_alpha = alpha
             best_div_ext = x
             best_div_int = y
+        else
+            alpha_div_counter -= 1
+            alpha_div_counter == 0 && break
         end
     end
     return [best_alpha, best_div, best_div_ext, best_div_int]
@@ -169,10 +160,10 @@ Calculates directed Weighted Geometric Chung-Lu model and divergence score for g
 function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
             embed::Matrix{Float64}, distances::Vector{Float64}, verbose::Bool=false)
     # default values
-    epsilon = 0.1
     delta = 0.001
     AlphaMax = 10.0
     AlphaStep = 0.25
+    alpha_div_counter = 5
 
     no_vertices = maximum(edges)
     no_edges = size(edges,1)
@@ -185,23 +176,37 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     # Compute degrees
     degree_in = zeros(no_vertices)
     degree_out = zeros(no_vertices)
+    star_check = zeros(Int64,no_vertices)
     for i in 1:no_edges
         a = weights[i]
-        degree_out[edges[i,1]]+=a
-        degree_in[edges[i,2]]+=a
+        v1 = edges[i,1]
+        v2 = edges[i,2]
+        degree_out[v1]+=a
+        degree_in[v2]+=a
+        star_check[v1]+=1
+        star_check[v2]+=1
     end
+
+    # Check for edge case - star graph
+    is_star = false
+    # Star based on either in or out edges
+    if !isnothing(findfirst(==(no_vertices-1),star_check)) && sum(star_check) == 2*(no_vertices-1)
+        is_star = true
+    # Star based on both in and out edges
+    elseif !isnothing(findfirst(==(2*(no_vertices-1)),star_check)) && sum(star_check .== 2) == no_vertices-1
+        is_star = true
+    end
+    verbose && is_star && println("Graph is a star in respect to either in or out edges")
 
     # Compute C-vector
     vect_len = Int(n_parts*n_parts)
     vect_C = zeros(Float64, vect_len)
     vect_B = zeros(Float64, vect_len)
- 
+
     for i in 1:no_edges
-        a = weights[i]
         j = comm[edges[i,1]]
         k = comm[edges[i,2]]
-        l = (j-1)*n_parts + k
-        vect_C[l] += a
+        vect_C[(j-1)*n_parts + k] += weights[i]
     end
 
     # Indicator - internal to a community
@@ -223,7 +228,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     for i in 1:no_vertices
         for j in i:no_vertices
             l = idx(no_vertices, i, j)
-            if i == j 
+            if i == j
                 D[l] = distances[i]
             else
                 D[l] = dist(i,j,embed)
@@ -235,8 +240,8 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     Tin = ones(no_vertices)
     Tin[degree_in.==0] .= 0.0
     Tout = ones(no_vertices)
-    Tout[degree_in.==0] .= 0.0   
-    
+    Tout[degree_out.==0] .= 0.0
+
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
         # Apply kernel (g(dist))
         GD = zeros(Float64, p_len)
@@ -250,12 +255,13 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
         # Learn GCL model numerically
         diff = 1.0
         count = 0
+        epsilon = 0.9
         while diff > delta # stopping criterion
             count += 1
             Sin = zeros(no_vertices)
             Sout = zeros(no_vertices)
             for i in 1:no_vertices
-                for j in i:no_vertices   
+                for j in i:no_vertices
                     k = idx(no_vertices, i, j)
                     tmp1 = Tin[i]*Tout[j]*GD[k]
                     tmp2 = Tin[j]*Tout[i]*GD[k]
@@ -264,8 +270,8 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                     Sout[i] += tmp2
                     Sout[j] += tmp1
                 end
-            end          
-            
+            end
+
             f = 0.0
             for i in 1:no_vertices
                 if degree_in[i]>0
@@ -277,9 +283,11 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                     f = max(f,abs(degree_out[i]-Sout[i])) # convergence w.r.t. degrees
                 end
             end
+            if f > diff
+                epsilon *= 0.99
+            end
             diff = f
             verbose && println("diff= $diff")
-            # epsilon *= 1.0001
         end
         println(alpha,",",count)
         # Compute probas P[]
@@ -307,6 +315,9 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             best_alpha = alpha
             best_div_ext = x
             best_div_int = y
+        else
+            alpha_div_counter -= 1
+            alpha_div_counter == 0 && break
         end
     end
     return [best_alpha, best_div, best_div_ext, best_div_int]
