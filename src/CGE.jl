@@ -2,6 +2,7 @@ module CGE
 
 using DelimitedFiles
 using Statistics
+using StatsBase
 using LinearAlgebra
 using louvain_jll
 

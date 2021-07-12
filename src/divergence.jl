@@ -164,6 +164,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     AlphaMax = 10.0
     AlphaStep = 0.25
     alpha_div_counter = 5
+    auc_samples = 2000
 
     no_vertices = maximum(edges)
     no_edges = size(edges,1)
@@ -198,6 +199,9 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     end
     verbose && is_star && println("Graph is a star in respect to either in or out edges")
 
+    if is_star
+        return [-1.0,zeros(5)...]
+    end
     # Compute C-vector
     vect_len = Int(n_parts*n_parts)
     vect_C = zeros(Float64, vect_len)
@@ -214,7 +218,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     for i in 1:(n_parts+1):vect_len
         vect_I[i] = true
     end
-    best_div = best_div_ext = best_div_int = typemax(Float64)
+    best_div = best_div_ext = best_div_int = best_auc_err = best_auc = typemax(Float64)
     best_alpha = -1.0
     dim = size(embed,2)
     verbose && println("Embedding has $dim dimensions")
@@ -242,6 +246,25 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     Tout = ones(no_vertices)
     Tout[degree_out.==0] .= 0.0
 
+    #Generate arrays of edges and non-edges
+    NE = Tuple{Int64,Int64}[]
+    for i in 1:no_vertices
+        for j in 1:no_vertices
+            if i!=j
+                push!(NE,(i,j))
+            end
+        end
+    end
+
+    ## tuples of edges
+    E = Tuple{Int64,Int64}[]
+    for e in eachrow(edges)
+        push!(E,tuple(e...))
+    end
+
+    ## tuples of non-edges
+    NE = collect(setdiff(Set(NE),Set(E)));
+
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
         # Apply kernel (g(dist))
         GD = zeros(Float64, p_len)
@@ -254,10 +277,8 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
         end
         # Learn GCL model numerically
         diff = 1.0
-        count = 0
         epsilon = 0.9
         while diff > delta # stopping criterion
-            count += 1
             Sin = zeros(no_vertices)
             Sout = zeros(no_vertices)
             for i in 1:no_vertices
@@ -289,7 +310,6 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             diff = f
             verbose && println("diff= $diff")
         end
-        println(alpha,",",count)
         # Compute probas P[]
         P = zeros(Float64,2*p_len)
         for i in 1:no_vertices
@@ -298,6 +318,17 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                 b = max(i,j)
                 P[no_vertices*(i-1)+j] = Tin[i]*Tout[j]*GD[idx(no_vertices,a,b)]
             end
+        end
+        ## random positive cases
+        pos = [P[(no_vertices-1)*(E[i][1]-1)+E[i][2]-Int(E[i][2]>E[i][1])] for i in sample(1:length(E),auc_samples)]
+        ## random negative cases
+        neg = [P[(no_vertices-1)*(NE[i][1]-1)+NE[i][2]-Int(NE[i][2]>NE[i][1])] for i in sample(1:length(NE),auc_samples)]
+        auc = 1 - sum(pos .> neg)/auc_samples
+        ## auc estimate
+        err = 1.96 * sqrt(auc*(1-auc)/auc_samples) ## error from 95% CI
+        if auc < best_auc
+            best_auc = auc
+            best_auc_err = err
         end
         # Compute B-vector given P[] and comm[]
         vect_B = zeros(vect_len)
@@ -320,5 +351,5 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             alpha_div_counter == 0 && break
         end
     end
-    return [best_alpha, best_div, best_div_ext, best_div_int]
+    return [best_alpha, best_div, best_div_ext, best_div_int, best_auc, best_auc_err]
 end
