@@ -320,9 +320,9 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             end
         end
         ## random positive cases
-        pos = [P[(no_vertices-1)*(E[i][1]-1)+E[i][2]-Int(E[i][2]>E[i][1])] for i in sample(1:length(E),auc_samples)]
+        pos = [P[no_vertices*(i[1]-1)+i[2]] for i in sample(E,auc_samples)]
         ## random negative cases
-        neg = [P[(no_vertices-1)*(NE[i][1]-1)+NE[i][2]-Int(NE[i][2]>NE[i][1])] for i in sample(1:length(NE),auc_samples)]
+        neg = [P[no_vertices*(i[1]-1)+i[2]] for i in sample(NE,auc_samples)]
         auc = 1 - sum(pos .> neg)/auc_samples
         ## auc estimate
         err = 1.96 * sqrt(auc*(1-auc)/auc_samples) ## error from 95% CI
