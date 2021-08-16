@@ -9,36 +9,42 @@ Calculates Weighted Geometric Chung-Lu model and divergence score for graph and 
 
 **Arguments**
 * `edges::Array{Int,2}` array with edges definition (two whitespace separated vertices ids)
-* `weights::Vector{Float64}` edges weights
+* `eweights::Vector{Float64}` edges weights
 * `comm::Array{Int,2}` assignment of vertices to communities
 * `embed::Array{Float64,2}` array with vertices embeddings
 * `distances::Vector{Float64}` distances between vertices
+* `vweights::Vector{Float64}` vertices weights - used only with landmarks approximation
+* `lweight::Vector{Float64}` landmarks total weights - used only with landmarks approximation
+* `v_to_l::Vector{Int}` mapping from vertices to landmarks (landmarks membership) - used only with landmarks approximation
+* `init_edges::Array{Int,2}` array with original (full) graph edges - used only with landmarks approximation
+* `init_embed::Matrix{Float64}` array with original embedding for full graph - used only with landmarks approximation
 * `verbose::Bool` verbose switch, if true prints additional processing information
 """
-function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
-            embed::Matrix{Float64}, distances::Vector{Float64}, verbose::Bool=false)
-    # default values
-    epsilon = 0.25
-    delta = 0.001
-    AlphaMax = 10.0
-    AlphaStep = 0.25
-    alpha_div_counter = 5
+function wGCL(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
+            embed::Matrix{Float64}, distances::Vector{Float64}, vweights::Vector{Float64},
+            lweight::Vector{Float64}, v_to_l::Vector{Int}, init_edges::Array{Int,2}, init_embed::Matrix{Float64}, 
+            verbose::Bool=false)
+
+    # Default parameters values
+    epsilon = 0.25 # learning rate in Chung Lu model
+    delta = 0.001 # desired precision of degree estimation in Chung Lu model
+    AlphaMax = 10.0 # upper bound of alpha search
+    AlphaStep = 0.25 # step in alpha search
+    alpha_div_counter = alpha_auc_counter = 5 # early stopping threshold (iterations of alpha search without improvement)
+    skip_div = skip_auc = false # skippig flags based on early stopping counters
+    auc_samples = 2000 # no. samples in AUC metric (local metric)
 
     no_vertices = maximum(edges)
     no_edges = size(edges,1)
-    verbose && println("$no_vertices vertices and $no_edges edges")
+    landmarks = !isempty(v_to_l)
+
+    verbose && println("Graph has $no_vertices vertices and $no_edges edges")
+    landmarks && verbose && println("Original graph has $(maximum(init_edges)) vertices and $(size(init_edges,1)) edges")
 
     # Read communities
-    @assert size(comm,1) == no_vertices
+    @assert size(comm,1) == no_vertices "No. communities not matching no. vertices"
     n_parts = maximum(comm)
-
-    # Compute degrees
-    degree = zeros(no_vertices)
-    for i in 1:no_edges
-        a = weights[i]
-        degree[edges[i,1]]+=a
-        degree[edges[i,2]]+=a
-    end
+    verbose && println("Graph has $n_parts communities")
 
     # Compute C-vector
     vect_len = Int(n_parts*(n_parts+1)/2)
@@ -46,27 +52,28 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
     vect_B = zeros(Float64, vect_len)
 
     for i in 1:no_edges
-        a = weights[i]
+        a = eweights[i]
         j,k = extrema([comm[edges[i,1]],comm[edges[i,2]]])
         vect_C[idx(n_parts, j, k)] += a
     end
-    # Indicator - internal to a community
+
+    # Intra-community indicator
     vect_I = falses(vect_len)
-    j=1
+    j = 1
     for i in 1:n_parts
         vect_I[j] = true
-        j+=(n_parts-i+1)
+        j += (n_parts-i+1)
     end
-    best_div = best_div_ext = best_div_int = typemax(Float64)
-    best_alpha = -1.0
+    best_div = best_div_ext = best_div_int = best_auc_err = best_auc = typemax(Float64)
+    best_alpha = best_alpha_auc = -1.0
     dim = size(embed,2)
     verbose && println("Embedding has $dim dimensions")
     # Loop over alpha's
 
-    # Compute Euclidean distance vector D[] given embed and alpha
-    p_len = no_vertices*(no_vertices+1) ÷ 2
+    # Compute Euclidean distance vector D[] given the embedding
+    p_len = no_vertices*(no_vertices + 1) ÷ 2
     D = zeros(Float64,p_len)
-    @assert size(distances,1) == no_vertices
+    @assert length(distances) == no_vertices "Distances vector length is not equal to no. vertices"
     for i in 1:no_vertices
         for j in i:no_vertices
             l = idx(no_vertices, i, j)
@@ -78,17 +85,57 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
         end
     end
     lo,hi = extrema(D)
+    D = (D.-lo)./(hi-lo) # normalize to [0,1]
 
-    # Loop here - exclude Alpha = 0
+    adj_no_vertices = no_vertices
+    adj_edges = edges
+    if landmarks
+        adj_no_vertices = length(vweights)
+        adj_edges = init_edges
+    end
+
+    if landmarks
+        adj_p_len = adj_no_vertices*(adj_no_vertices+1) ÷ 2
+        full_graph_D = zeros(Float64, adj_p_len)
+        for i in 1:adj_no_vertices
+            for j in (i+1):adj_no_vertices
+                l = idx(adj_no_vertices, i, j)
+                full_graph_D[l] = dist(i,j,init_embed)
+            end
+        end
+        lo,hi = extrema(full_graph_D)
+        full_graph_D = (full_graph_D.-lo)./(hi-lo) # normalize to [0,1]
+    end
+
+    # Chung Lu model weights to be tuned
     T = ones(no_vertices)
+
+    # Generate arrays of edges and non-edges
+    NE = Tuple{Int64,Int64}[]
+    for i in 1:adj_no_vertices
+        for j in i:adj_no_vertices
+            if i!=j
+                push!(NE,(i,j))
+            end
+        end
+    end
+
+    ## Tuples of edges
+    E = Tuple{Int64,Int64}[]
+    for e in eachrow(adj_edges)
+        push!(E,extrema(tuple(e...)))
+    end
+
+    ## Tuples of non-edges
+    NE = collect(setdiff(Set(NE),Set(E)));
+
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
         # Apply kernel (g(dist))
         GD = zeros(Float64,p_len)
         for i in 1:no_vertices
             for j in i:no_vertices
                 k = idx(no_vertices,i,j)
-                GD[k] = (D[k]-lo)/(hi-lo) # normalize to [0,1]
-                GD[k] = (1-GD[k])^alpha # transform w.r.t. alpha
+                GD[k] = (1-D[k])^alpha # transform w.r.t. alpha
             end
         end
         # Learn GCL model numerically
@@ -99,48 +146,91 @@ function wGCL(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
                 for j in i:no_vertices
                     tmp = T[i]*T[j]*GD[idx(no_vertices, i, j)]
                     S[i] += tmp
-                    if i!=j S[j]+=tmp end
+                    if i!=j S[j] += tmp end
                 end
             end
             f = 0.0
             for i in 1:no_vertices
-                move = epsilon*T[i]*(degree[i]/S[i]-1.0)
-                T[i]+=move
-                f = max(f,abs(degree[i]-S[i])) # convergence w.r.t. degrees
+                move = epsilon*T[i]*(vweights[i]/S[i]-1.0)
+                T[i] += move
+                f = max(f,abs(vweights[i]-S[i])) # convergence w.r.t. degrees
             end
             diff = f
-            verbose && println("diff = $diff")
+            # verbose && println("diff = $diff")
         end
         # Compute probas P[]
         P = zeros(Float64,p_len)
         for i in 1:no_vertices
             for j in i:no_vertices
-                P[k] = T[i]*T[j]*GD[idx(no_vertices,i,j)]
+                k = idx(no_vertices,i,j)
+                P[k] = T[i]*T[j]*GD[k]
             end
         end
 
-        # Compute B-vector given P[] and comm[]
-        vect_B = zeros(vect_len)
-        for i in 1:no_vertices
-            for j in i:no_vertices
-                k,l = extrema([comm[i],comm[j]])
-                vect_B[Int(n_parts*(k-1)-(k-1)*(k-2)/2+l-k+1)] += P[idx(no_vertices,i,j)]
+        if !skip_auc
+            pos = zeros(auc_samples)
+            neg = zeros(auc_samples)
+            if landmarks
+                ## Random positive cases
+                for (ind, edge) in enumerate(sample(E,auc_samples))
+                    i, j = edge
+                    adj_Ti = T[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
+                    adj_Tj = T[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    pos[ind] = adj_Ti*adj_Tj*((1-full_graph_D[idx(adj_no_vertices,i,j)])^alpha)
+                end
+                ## Random negative cases
+                for (ind, edge) in enumerate(sample(NE,auc_samples))
+                    i, j = edge
+                    adj_T_i = T[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
+                    adj_T_j = T[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    neg[ind] = adj_T_i*adj_T_j*((1-full_graph_D[idx(adj_no_vertices,i,j)])^alpha)
+                end
+            else
+                ## Random positive cases
+                pos = [P[idx(no_vertices,i,j)] for (i,j) in sample(E,auc_samples)]
+                ## Random negative cases
+                neg = [P[idx(no_vertices,i,j)] for (i,j) in sample(NE,auc_samples)]  
+            end
+            # 1 - AUC 
+            auc = 1 - sum(pos .> neg)/auc_samples
+
+            if auc < best_auc
+                best_auc = auc
+                best_auc_err = 1.96 * sqrt(auc*(1-auc)/auc_samples) ## error from 95% CI
+                best_alpha_auc = alpha
+                alpha_auc_counter = 5
+            else
+                alpha_auc_counter -= 1
+                skip_auc = alpha_auc_counter == 0
             end
         end
-        x = JS(vect_C, vect_B, vect_I, true)
-        y = JS(vect_C, vect_B, vect_I, false)
-        f = (x+y)/2.0
-        if f < best_div
-            best_div = f
-            best_alpha = alpha
-            best_div_ext = x
-            best_div_int = y
-        else
-            alpha_div_counter -= 1
-            alpha_div_counter == 0 && break
+
+        if !skip_div
+            # Compute B-vector given P[] and comm[]
+            vect_B = zeros(vect_len)
+            for i in 1:no_vertices
+                for j in i:no_vertices
+                    k,l = extrema([comm[i],comm[j]])
+                    vect_B[idx(n_parts, k, l)] += P[idx(no_vertices,i,j)]
+                end
+            end
+            x = JS(vect_C, vect_B, vect_I, true)
+            y = JS(vect_C, vect_B, vect_I, false)
+            f = (x+y)/2.0
+            if f < best_div
+                best_div = f
+                best_alpha = alpha
+                best_div_ext = x
+                best_div_int = y
+                alpha_div_counter = 5
+            else
+                alpha_div_counter -= 1
+                skip_div = alpha_div_counter == 0
+            end
         end
+        skip_div && skip_auc && break
     end
-    return [best_alpha, best_div, best_div_ext, best_div_int]
+    return [best_alpha, best_div, best_div_ext, best_div_int, best_alpha_auc, best_auc, best_auc_err]
 end
 
 """
@@ -155,24 +245,36 @@ Calculates directed Weighted Geometric Chung-Lu model and divergence score for g
 * `comm::Array{Int,2}` assignment of vertices to communities
 * `embed::Array{Float64,2}` array with vertices embeddings
 * `distances::Vector{Float64}` distances between vertices
+* `vweights::Vector{Float64}` vertices weights - used only with landmarks approximation
+* `lweight::Vector{Float64}` landmarks total weights - used only with landmarks approximation
+* `v_to_l::Vector{Int}` mapping from vertices to landmarks (landmarks membership) - used only with landmarks approximation
+* `init_edges::Array{Int,2}` array with original (full) graph edges - used only with landmarks approximation
+* `init_embed::Matrix{Float64}` array with original embedding for full graph - used only with landmarks approximation
 * `verbose::Bool` verbose switch, if true prints additional processing information
 """
 function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
-            embed::Matrix{Float64}, distances::Vector{Float64}, verbose::Bool=false)
-    # default values
-    delta = 0.001
-    AlphaMax = 10.0
-    AlphaStep = 0.25
-    alpha_div_counter = 5
-    auc_samples = 2000
+            embed::Matrix{Float64}, distances::Vector{Float64}, vweights::Vector{Float64},
+            lweight::Vector{Float64}, v_to_l::Vector{Int}, init_edges::Array{Int,2}, init_embed::Matrix{Float64}, 
+            verbose::Bool=false)
+    # Default values
+    delta = 0.001 # desired precision of degree estimation in Chung Lu model
+    AlphaMax = 10.0 # upper bound of alpha search
+    AlphaStep = 0.25 # step in alpha search
+    alpha_div_counter = alpha_auc_counter = 5 # early stopping threshold (iterations of alpha search without improvement)
+    skip_div = skip_auc = false # skippig flags based on early stopping counters
+    auc_samples = 2000 # no. samples in AUC metric (local metric)
 
     no_vertices = maximum(edges)
     no_edges = size(edges,1)
-    verbose && println("$no_vertices vertices and $no_edges edges")
+    landmarks = !isempty(v_to_l)
+
+    verbose && println("Graph has $no_vertices vertices and $no_edges edges")
+    landmarks && verbose && println("Original graph has $(maximum(init_edges)) vertices and $(size(init_edges,1)) edges")
 
     # Read communities
-    @assert size(comm,1) == no_vertices
+    @assert size(comm,1) == no_vertices "No. communities not matching no. vertices"
     n_parts = maximum(comm)
+    verbose && println("Graph has $n_parts communities")
 
     # Compute degrees
     degree_in = zeros(no_vertices)
@@ -202,6 +304,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     if is_star
         return [-1.0,zeros(5)...]
     end
+
     # Compute C-vector
     vect_len = Int(n_parts*n_parts)
     vect_C = zeros(Float64, vect_len)
@@ -219,7 +322,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
         vect_I[i] = true
     end
     best_div = best_div_ext = best_div_int = best_auc_err = best_auc = typemax(Float64)
-    best_alpha = -1.0
+    best_alpha = best_alpha_auc = -1.0
     dim = size(embed,2)
     verbose && println("Embedding has $dim dimensions")
     # Loop over alpha's
@@ -227,8 +330,9 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     # Compute Euclidean distance vector D[] given embed and alpha
     p_len = no_vertices*(no_vertices+1) ÷ 2
     D = zeros(Float64, p_len)
+
     #Read distances
-    @assert size(distances,1) == no_vertices
+    @assert size(distances,1) == no_vertices "Distances vector length is not equal to no. vertices"
     for i in 1:no_vertices
         for j in i:no_vertices
             l = idx(no_vertices, i, j)
@@ -240,16 +344,37 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
         end
     end
     lo,hi = extrema(D)
+    D = (D.-lo)./(hi-lo) # normalize to [0,1]
+
+    adj_no_vertices = no_vertices
+    adj_edges = edges
+    if landmarks
+        adj_no_vertices = length(vweights)
+        adj_edges = init_edges
+    end
+
+    if landmarks
+        adj_p_len = adj_no_vertices*(adj_no_vertices+1) ÷ 2
+        full_graph_D = zeros(Float64, adj_p_len)
+        for i in 1:adj_no_vertices
+            for j in (i+1):adj_no_vertices
+                l = idx(adj_no_vertices, i, j)
+                full_graph_D[l] = dist(i,j,init_embed)
+            end
+        end
+        lo,hi = extrema(full_graph_D)
+        full_graph_D = (full_graph_D.-lo)./(hi-lo) # normalize to [0,1]
+    end
     # Loop here - exclude Alpha = 0
     Tin = ones(no_vertices)
     Tin[degree_in.==0] .= 0.0
     Tout = ones(no_vertices)
     Tout[degree_out.==0] .= 0.0
 
-    #Generate arrays of edges and non-edges
+    # Generate arrays of edges and non-edges
     NE = Tuple{Int64,Int64}[]
-    for i in 1:no_vertices
-        for j in 1:no_vertices
+    for i in 1:adj_no_vertices
+        for j in 1:adj_no_vertices
             if i!=j
                 push!(NE,(i,j))
             end
@@ -258,12 +383,12 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
 
     ## tuples of edges
     E = Tuple{Int64,Int64}[]
-    for e in eachrow(edges)
+    for e in eachrow(adj_edges)
         push!(E,tuple(e...))
     end
 
     ## tuples of non-edges
-    NE = collect(setdiff(Set(NE),Set(E)));
+    NE = collect(setdiff(Set(NE),Set(E)))
 
     for alpha in AlphaStep:AlphaStep:(AlphaMax+delta)
         # Apply kernel (g(dist))
@@ -271,8 +396,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
         for i in 1:no_vertices
             for j in i:no_vertices
                 k = idx(no_vertices,i,j)
-                GD[k] = (D[k]-lo)/(hi-lo) # normalize to [0,1]
-                GD[k] = (1-GD[k])^alpha # transform w.r.t. alpha
+                GD[k] = (1-D[k])^alpha # transform w.r.t. alpha
             end
         end
         # Learn GCL model numerically
@@ -308,48 +432,83 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                 epsilon *= 0.99
             end
             diff = f
-            verbose && println("diff= $diff")
+            # verbose && println("diff= $diff")
         end
+
         # Compute probas P[]
         P = zeros(Float64,2*p_len)
         for i in 1:no_vertices
             for j in 1:no_vertices
-                a = min(i,j)
-                b = max(i,j)
-                P[no_vertices*(i-1)+j] = Tin[i]*Tout[j]*GD[idx(no_vertices,a,b)]
+                a, b = extrema([i,j])
+                P[no_vertices*(i-1)+j] = Tout[i]*Tin[j]*GD[idx(no_vertices,a,b)]
             end
         end
-        ## random positive cases
-        pos = [P[no_vertices*(i[1]-1)+i[2]] for i in sample(E,auc_samples)]
-        ## random negative cases
-        neg = [P[no_vertices*(i[1]-1)+i[2]] for i in sample(NE,auc_samples)]
-        auc = 1 - sum(pos .> neg)/auc_samples
-        ## auc estimate
-        err = 1.96 * sqrt(auc*(1-auc)/auc_samples) ## error from 95% CI
-        if auc < best_auc
-            best_auc = auc
-            best_auc_err = err
-        end
-        # Compute B-vector given P[] and comm[]
-        vect_B = zeros(vect_len)
-        for i in 1:no_vertices
-            for j in 1:no_vertices
-                m = (comm[i]-1)*n_parts + comm[j]
-                vect_B[m] += P[no_vertices*(i-1)+j]
+
+        if !skip_auc
+            pos = zeros(auc_samples)
+            neg = zeros(auc_samples)
+            if landmarks
+                ## random positive cases
+                for (ind, edge) in enumerate(sample(E,auc_samples))
+                    i, j = edge
+                    a, b = extrema(edge)
+                    adj_Tout = Tout[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
+                    adj_Tin = Tin[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    pos[ind] = adj_Tout*adj_Tin*((1-full_graph_D[idx(adj_no_vertices,a,b)])^alpha)
+                end
+                ## random negative cases
+                for (ind, edge) in enumerate(sample(NE,auc_samples))
+                    i, j = edge
+                    a, b = extrema(edge)
+                    adj_Tout = Tout[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
+                    adj_Tin = Tin[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    neg[ind] = adj_Tout*adj_Tin*((1-full_graph_D[idx(adj_no_vertices,a,b)])^alpha)
+                end
+            else
+                ## random positive cases
+                pos = [P[no_vertices*(i-1)+j] for (i,j) in sample(E,auc_samples)]
+                ## random negative cases
+                neg = [P[no_vertices*(i-1)+j] for (i,j) in sample(NE,auc_samples)]  
+            end
+        
+            # 1 - AUC
+            auc = 1 - sum(pos .> neg)/auc_samples
+
+            if auc < best_auc
+                best_auc = auc
+                best_auc_err = 1.96 * sqrt(auc*(1-auc)/auc_samples) ## error from 95% CI
+                best_alpha_auc = alpha
+                alpha_auc_counter = 5
+            else
+                alpha_auc_counter -= 1
+                skip_auc = alpha_auc_counter == 0
             end
         end
-        x = JS(vect_C, vect_B, vect_I, true)
-        y = JS(vect_C, vect_B, vect_I, false)
-        f = (x+y)/2.0
-        if f < best_div
-            best_div = f
-            best_alpha = alpha
-            best_div_ext = x
-            best_div_int = y
-        else
-            alpha_div_counter -= 1
-            alpha_div_counter == 0 && break
+
+        if !skip_div
+            # Compute B-vector given P[] and comm[]
+            vect_B = zeros(vect_len)
+            for i in 1:no_vertices
+                for j in 1:no_vertices
+                    m = (comm[i]-1)*n_parts + comm[j]
+                    vect_B[m] += P[no_vertices*(i-1)+j]
+                end
+            end
+            x = JS(vect_C, vect_B, vect_I, true)
+            y = JS(vect_C, vect_B, vect_I, false)
+            f = (x+y)/2.0
+            if f < best_div
+                best_div = f
+                best_alpha = alpha
+                best_div_ext = x
+                best_div_int = y
+                alpha_div_counter = 5
+            else
+                alpha_div_counter -= 1
+                skip_div = alpha_div_counter == 0
+            end
         end
+        skip_div && skip_auc && break
     end
-    return [best_alpha, best_div, best_div_ext, best_div_int, best_auc, best_auc_err]
+    return [best_alpha, best_div, best_div_ext, best_div_int, best_alpha_auc, best_auc, best_auc_err]
 end

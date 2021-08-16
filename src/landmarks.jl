@@ -388,9 +388,9 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
     # read from 0-based embedding file
     for i in 1:rows_embed
         what = landmarks[i]
-        lweight[what]+=1
+        lweight[what] += vweights[i]
         for j in 1:dim
-            embed[what,j]+=embedding[i,j]
+            embed[what,j] += vweights[i]*embedding[i,j]
         end
     end
 
@@ -445,5 +445,5 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
     weights = landmark_edges[:,3]
     landmark_edges = Int.(landmark_edges[:,1:2])
 
-    return dii, embed, cluster, landmark_edges, weights
+    return dii, embed, cluster, landmark_edges, weights, lweight, landmarks
 end

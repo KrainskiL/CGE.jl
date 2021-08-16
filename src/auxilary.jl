@@ -96,22 +96,12 @@ function parseargs()
 
         # If graph is unweighted, add unit weights
         # Compute vertices weights
-        if no_cols == 2
-            edges = convert.(Int,edges)
-            eweights = ones(rows)
-            vweight = zeros(no_vertices)
-            for i in 1:rows
-                vweight[edges[i,1]] += 1.0
-                vweight[edges[i,2]] += 1.0
-            end
-        else
-            eweights = edges[:,3]
-            edges = convert.(Int,edges[:,1:2])
-            vweight = zeros(no_vertices)
-            for i in 1:rows
-                vweight[edges[i,1]] += eweights[i]
-                vweight[edges[i,2]] += eweights[i]
-            end
+        vweight = zeros(no_vertices)
+        edges = convert.(Int,edges[:,1:2])
+        eweights = no_cols == 2 ? ones(rows) : edges[:,3]
+        for i in 1:rows
+            vweight[edges[i,1]] += eweights[i]
+            vweight[edges[i,2]] += eweights[i]
         end
         verbose && println("Done preparing edgelist and vertices weights")
 

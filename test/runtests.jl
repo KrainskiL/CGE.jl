@@ -92,7 +92,8 @@ embed, verbose, land, forced, CGE.split_cluster_diameter);
 @test typeof(distances) == Array{Float64,1}
 end
 
-results = wGCL(ledges, lweights, lcomm, lembed, distances, verbose);
+results = wGCL(ledges, lweights, lcomm, lembed, distances, 
+    Float64[], Float64[], Int64[], Matrix{Int}(undef,0,0), Matrix{Float64}(undef,0,0),verbose);
 
 @testset "wgcl" begin
 
