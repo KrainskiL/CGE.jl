@@ -13,17 +13,19 @@ Calculates Weighted Geometric Chung-Lu model and divergence score for graph and 
 * `comm::Array{Int,2}` assignment of vertices to communities
 * `embed::Array{Float64,2}` array with vertices embeddings
 * `distances::Vector{Float64}` distances between vertices
-* `vweights::Vector{Float64}` vertices weights - used only with landmarks approximation
-* `lweight::Vector{Float64}` landmarks total weights - used only with landmarks approximation
+* `vweights::Vector{Float64}` landmarks total weights - used only with landmarks approximation 
+* `init_vweights::Vector{Float64}` vector with original (full) vertices weights - used only with landmarks approximation
 * `v_to_l::Vector{Int}` mapping from vertices to landmarks (landmarks membership) - used only with landmarks approximation
 * `init_edges::Array{Int,2}` array with original (full) graph edges - used only with landmarks approximation
 * `init_embed::Matrix{Float64}` array with original embedding for full graph - used only with landmarks approximation
+* `no_split::Bool` indicator for not splitting JS divergence score
+* `seed::Int` RNG seed for local measure score
 * `verbose::Bool` verbose switch, if true prints additional processing information
 """
 function wGCL(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
             embed::Matrix{Float64}, distances::Vector{Float64}, vweights::Vector{Float64},
-            lweight::Vector{Float64}, v_to_l::Vector{Int}, init_edges::Array{Int,2}, init_embed::Matrix{Float64}, 
-            verbose::Bool=false)
+            init_vweights::Vector{Float64}, v_to_l::Vector{Int}, init_edges::Array{Int,2}, init_embed::Matrix{Float64}, 
+            no_split::Bool, seed::Int=-1, verbose::Bool=false)
 
     # Default parameters values
     epsilon = 0.25 # learning rate in Chung Lu model
@@ -90,7 +92,7 @@ function wGCL(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
     adj_no_vertices = no_vertices
     adj_edges = edges
     if landmarks
-        adj_no_vertices = length(vweights)
+        adj_no_vertices = length(init_vweights)
         adj_edges = init_edges
     end
 
@@ -172,23 +174,27 @@ function wGCL(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
             neg = zeros(auc_samples)
             if landmarks
                 ## Random positive cases
+                seed != -1 && Random.seed!(seed)
                 for (ind, edge) in enumerate(sample(E,auc_samples))
                     i, j = edge
-                    adj_Ti = T[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
-                    adj_Tj = T[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    adj_Ti = T[v_to_l[i]]*init_vweights[i]/vweights[v_to_l[i]]
+                    adj_Tj = T[v_to_l[j]]*init_vweights[j]/vweights[v_to_l[j]]
                     pos[ind] = adj_Ti*adj_Tj*((1-full_graph_D[idx(adj_no_vertices,i,j)])^alpha)
                 end
                 ## Random negative cases
+                seed != -1 && Random.seed!(seed)
                 for (ind, edge) in enumerate(sample(NE,auc_samples))
                     i, j = edge
-                    adj_T_i = T[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
-                    adj_T_j = T[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    adj_T_i = T[v_to_l[i]]*init_vweights[i]/vweights[v_to_l[i]]
+                    adj_T_j = T[v_to_l[j]]*init_vweights[j]/vweights[v_to_l[j]]
                     neg[ind] = adj_T_i*adj_T_j*((1-full_graph_D[idx(adj_no_vertices,i,j)])^alpha)
                 end
             else
                 ## Random positive cases
+                seed != -1 && Random.seed!(seed)
                 pos = [P[idx(no_vertices,i,j)] for (i,j) in sample(E,auc_samples)]
                 ## Random negative cases
+                seed != -1 && Random.seed!(seed)
                 neg = [P[idx(no_vertices,i,j)] for (i,j) in sample(NE,auc_samples)]  
             end
             # 1 - AUC 
@@ -214,14 +220,18 @@ function wGCL(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
                     vect_B[idx(n_parts, k, l)] += P[idx(no_vertices,i,j)]
                 end
             end
-            x = JS(vect_C, vect_B, vect_I, true)
-            y = JS(vect_C, vect_B, vect_I, false)
-            f = (x+y)/2.0
+            if no_split
+                f = JS(vect_C, vect_B, Bool[], true)
+            else
+                x = JS(vect_C, vect_B, vect_I, true)
+                y = JS(vect_C, vect_B, vect_I, false)
+                f = (x+y)/2.0
+            end
             if f < best_div
                 best_div = f
                 best_alpha = alpha
-                best_div_ext = x
-                best_div_int = y
+                best_div_ext = no_split ? 0.0 : x
+                best_div_int = no_split ? 0.0 : y
                 alpha_div_counter = 5
             else
                 alpha_div_counter -= 1
@@ -245,17 +255,19 @@ Calculates directed Weighted Geometric Chung-Lu model and divergence score for g
 * `comm::Array{Int,2}` assignment of vertices to communities
 * `embed::Array{Float64,2}` array with vertices embeddings
 * `distances::Vector{Float64}` distances between vertices
-* `vweights::Vector{Float64}` vertices weights - used only with landmarks approximation
-* `lweight::Vector{Float64}` landmarks total weights - used only with landmarks approximation
+* `vweights::Vector{Float64}` landmarks total weights - used only with landmarks approximation 
+* `init_vweights::Vector{Float64}` vector with original (full) vertices weights - used only with landmarks approximation
 * `v_to_l::Vector{Int}` mapping from vertices to landmarks (landmarks membership) - used only with landmarks approximation
 * `init_edges::Array{Int,2}` array with original (full) graph edges - used only with landmarks approximation
 * `init_embed::Matrix{Float64}` array with original embedding for full graph - used only with landmarks approximation
+* `no_split::Bool` indicator for not splitting JS divergence score
+* `seed::Int` RNG seed for local measure score
 * `verbose::Bool` verbose switch, if true prints additional processing information
 """
 function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
             embed::Matrix{Float64}, distances::Vector{Float64}, vweights::Vector{Float64},
-            lweight::Vector{Float64}, v_to_l::Vector{Int}, init_edges::Array{Int,2}, init_embed::Matrix{Float64}, 
-            verbose::Bool=false)
+            init_vweights::Vector{Float64}, v_to_l::Vector{Int}, init_edges::Array{Int,2}, init_embed::Matrix{Float64}, 
+            no_split::Bool, seed::Int=-1, verbose::Bool=false)
     # Default values
     delta = 0.001 # desired precision of degree estimation in Chung Lu model
     AlphaMax = 10.0 # upper bound of alpha search
@@ -349,7 +361,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     adj_no_vertices = no_vertices
     adj_edges = edges
     if landmarks
-        adj_no_vertices = length(vweights)
+        adj_no_vertices = length(init_vweights)
         adj_edges = init_edges
     end
 
@@ -449,25 +461,29 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             neg = zeros(auc_samples)
             if landmarks
                 ## random positive cases
+                seed != -1 && Random.seed!(seed)
                 for (ind, edge) in enumerate(sample(E,auc_samples))
                     i, j = edge
                     a, b = extrema(edge)
-                    adj_Tout = Tout[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
-                    adj_Tin = Tin[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    adj_Tout = Tout[v_to_l[i]]*init_vweights[i]/vweights[v_to_l[i]]
+                    adj_Tin = Tin[v_to_l[j]]*init_vweights[j]/vweights[v_to_l[j]]
                     pos[ind] = adj_Tout*adj_Tin*((1-full_graph_D[idx(adj_no_vertices,a,b)])^alpha)
                 end
                 ## random negative cases
+                seed != -1 && Random.seed!(seed)
                 for (ind, edge) in enumerate(sample(NE,auc_samples))
                     i, j = edge
                     a, b = extrema(edge)
-                    adj_Tout = Tout[v_to_l[i]]*vweights[i]/lweight[v_to_l[i]]
-                    adj_Tin = Tin[v_to_l[j]]*vweights[j]/lweight[v_to_l[j]]
+                    adj_Tout = Tout[v_to_l[i]]*init_vweights[i]/vweights[v_to_l[i]]
+                    adj_Tin = Tin[v_to_l[j]]*init_vweights[j]/vweights[v_to_l[j]]
                     neg[ind] = adj_Tout*adj_Tin*((1-full_graph_D[idx(adj_no_vertices,a,b)])^alpha)
                 end
             else
                 ## random positive cases
+                seed != -1 && Random.seed!(seed)
                 pos = [P[no_vertices*(i-1)+j] for (i,j) in sample(E,auc_samples)]
                 ## random negative cases
+                seed != -1 && Random.seed!(seed)
                 neg = [P[no_vertices*(i-1)+j] for (i,j) in sample(NE,auc_samples)]  
             end
         
@@ -494,14 +510,18 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                     vect_B[m] += P[no_vertices*(i-1)+j]
                 end
             end
-            x = JS(vect_C, vect_B, vect_I, true)
-            y = JS(vect_C, vect_B, vect_I, false)
-            f = (x+y)/2.0
+            if no_split
+                f = JS(vect_C, vect_B, Bool[], true)
+            else
+                x = JS(vect_C, vect_B, vect_I, true)
+                y = JS(vect_C, vect_B, vect_I, false)
+                f = (x+y)/2.0
+            end
             if f < best_div
                 best_div = f
                 best_alpha = alpha
-                best_div_ext = x
-                best_div_int = y
+                best_div_ext = no_split ? 0.0 : x
+                best_div_int = no_split ? 0.0 : y
                 alpha_div_counter = 5
             else
                 alpha_div_counter -= 1

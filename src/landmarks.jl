@@ -350,7 +350,8 @@ end
 
 **Arguments**
 * `edges::Array{Int,2}` array with edges definition (two whitespace separated vertices ids)
-* `vweights::Vector{Float64}` vertices degrees
+* `weights::Vector{Float64}` edges weights
+* `vweights::Vector{Float64}` vertices weights
 * `clusters::Vector{Vector{Int}}` vector of vectors indicating an initial 1-based cluster
 assignment of vertices.
 * `embedding::Array{Float64,2}` array with vertices embeddings
@@ -359,10 +360,11 @@ assignment of vertices.
 * `land::Int` number of landmarks to generate
 * `forced::Int` required maximum number of forced splits of a cluster
 * `method::Function` method used to generate landmarks
+* `directed::Bool` flag for directed version of landmark-based graph creation
 """
 function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vector{Float64},
                     clusters::Vector{Vector{Int}}, comm::Array{Int,2},embedding::Array{Float64,2},
-                    verbose::Bool, land::Int, forced::Int, method::Function)
+                    verbose::Bool, land::Int, forced::Int, method::Function, directed::Bool)
 
     verbose && println("Starts landmark generation")
     rows_embed, dim = size(embedding)
@@ -429,16 +431,31 @@ function landmarks(edges::Array{Int,2}, weights::Vector{Float64}, vweights::Vect
 
     # Output weighted landmark_edgelist
     wedges = zeros(Float64,N,N)
-    for i in 1:size(edges,1)
-        a,b = extrema([landmarks[edges[i,1]],landmarks[edges[i,2]]])
-        wedges[a,b] += weights[i]
-    end
+    if directed
+        for i in 1:size(edges,1)
+            a,b = [landmarks[edges[i,1]],landmarks[edges[i,2]]]
+            wedges[a,b] += weights[i]
+        end
 
-    # re-write
-    landmark_edges = Array{Float64}(undef, Int(N*(N+1)/2), 3)
-    for i in 1:N
-        for j in i:N
-            landmark_edges[idx(N,i,j),:] = [i j wedges[i,j]]
+        # re-write
+        landmark_edges = Array{Float64}(undef, Int(N*N), 3)
+        for i in 1:N
+            for j in 1:N
+                landmark_edges[N*(i-1)+j,:] = [i j wedges[i,j]]
+            end
+        end
+    else
+        for i in 1:size(edges,1)
+            a,b = extrema([landmarks[edges[i,1]],landmarks[edges[i,2]]])
+            wedges[a,b] += weights[i]
+        end
+
+        # re-write
+        landmark_edges = Array{Float64}(undef, Int(N*(N+1)/2), 3)
+        for i in 1:N
+            for j in i:N
+                landmark_edges[idx(N,i,j),:] = [i j wedges[i,j]]
+            end
         end
     end
     landmark_edges = landmark_edges[landmark_edges[:,3] .>0,:]

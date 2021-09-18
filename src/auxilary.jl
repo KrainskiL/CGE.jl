@@ -68,6 +68,8 @@ function parseargs()
         verbose = !isnothing(findfirst(==("-v"),ARGS)) ? true : false
         # Check if provided graph is directed
         directed = !isnothing(findfirst(==("-d"),ARGS)) ? true : false
+        # Check if global score should be done with split
+        no_split = !isnothing(findfirst(==("--no-split"),ARGS)) ? true : false
 
         #############
         ## Edgelist #
@@ -97,14 +99,13 @@ function parseargs()
         # If graph is unweighted, add unit weights
         # Compute vertices weights
         vweight = zeros(no_vertices)
-        edges = convert.(Int,edges[:,1:2])
         eweights = no_cols == 2 ? ones(rows) : edges[:,3]
+        edges = convert.(Int,edges[:,1:2])
         for i in 1:rows
             vweight[edges[i,1]] += eweights[i]
             vweight[edges[i,2]] += eweights[i]
         end
         verbose && println("Done preparing edgelist and vertices weights")
-
         ################
         ## Communities #
         ################
@@ -120,6 +121,7 @@ function parseargs()
             comm = reshape(comm,size(comm)[1],1)
         end
         comm_rows, no_cols = size(comm)
+
         # Validate file structure
         @assert comm_rows == no_vertices "No. communities ($comm_rows) differ from no. nodes ($no_vertices)"
         @assert no_cols == 1 || no_cols == 2 "Expected 1 or 2 columns in communities file, but encountered $no_cols."
@@ -190,22 +192,27 @@ function parseargs()
         idx = findfirst(==("-f"),ARGS)
         forced = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
 
+        idx = findfirst(==("--seed"),ARGS)
+        seed = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
+
         idx = findfirst(==("-m"),ARGS)
         method_str = !isnothing(idx) ? lowercase(strip(ARGS[idx+1])) : "rss"
 
         method = methods[method_str]
-        return edges, eweights, vweight, comm, clusters, embedding, verbose, landmarks, forced, method, directed
+        return edges, eweights, vweight, comm, clusters, embedding, verbose, landmarks, forced, method, directed, no_split, seed
     catch e
         showerror(stderr, e)
         println("\n\nUsage:")
-        println("\tjulia CGE_CLI.jl -g graph_edgelist -e embedding [-c communities] [-a -v -d] [-l landmarks -f forced -m method]")
+        println("\tjulia CGE_CLI.jl -g graph_edgelist -e embedding [-c communities --seed seed -v -d --no-split -l landmarks -f forced -m method]")
         println("\nParameters:")
         println("graph_edgelist: rows should contain two vertices ids (edge) and optional weights in third column")
+        println("embedding: rows should contain whitespace separated locations of vertices in embedding")
         println("communities: rows should contain cluster identifiers of consecutive vertices with optional node ids in first column")
         println("if no file is given communities are calculated with Louvain algorithm")
-        println("embedding: rows should contain whitespace separated locations of vertices in embedding")
+        println("seed: RNG seed for local measure sampling")
         println("-v: flag for debugging messages")
         println("-d: flag for usage of directed framework")
+        println("--no-split: flag for using simple JS divergence (global) score")
         println("landmarks: required number of landmarks")
         println("forced: required maximum number of forced splits of a cluster")
         println("method: one of:")

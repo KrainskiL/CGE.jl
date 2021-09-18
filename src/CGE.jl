@@ -5,6 +5,7 @@ using Statistics
 using StatsBase
 using LinearAlgebra
 using louvain_jll
+using Random
 
 #auxilary
 export parseargs
