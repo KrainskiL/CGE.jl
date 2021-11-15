@@ -58,26 +58,29 @@ function idx(n::Int, i::Int, j::Int)
   return n*(i-1) - (i-1)*(i-2) ÷ 2 +j-i+1
 end
 
+parse_flag(flag::String) = !isnothing(findfirst(==(flag),ARGS)) ? true : false
+
 function parseargs()
     methods = Dict("rss" => split_cluster_rss,
                    "rss2" => split_cluster_rss2,
                    "size" => split_cluster_size,
                    "diameter" => split_cluster_diameter)
     try
-        # Check if calculations should be verbose
-        verbose = !isnothing(findfirst(==("-v"),ARGS)) ? true : false
-        # Check if provided graph is directed
-        directed = !isnothing(findfirst(==("-d"),ARGS)) ? true : false
-        # Check if global score should be done with split
-        no_split = !isnothing(findfirst(==("--no-split"),ARGS)) ? true : false
+        ###Flags###
 
-        #############
-        ## Edgelist #
-        #############
+        # Check if calculations should be verbose
+        verbose = parse_flag("-v")
+        # Check if provided graph is directed
+        directed = parse_flag("-d")
+        # Check if global score should be done with split
+        split = parse_flag("--split-global")
+
+        ###Edgelist###
 
         idx = findfirst(==("-g"),ARGS)
         @assert !isnothing(idx) "Edgelist file is required"
         fn_edges = ARGS[idx+1]
+        @assert isfile(fn_edges) "$fn_edges is not a file"
 
         # Read edges
         edges = readdlm(fn_edges, Float64)
@@ -106,13 +109,14 @@ function parseargs()
             vweight[edges[i,2]] += eweights[i]
         end
         verbose && println("Done preparing edgelist and vertices weights")
-        ################
-        ## Communities #
-        ################
+
+        ###Communities###
+
         idx = findfirst(==("-c"),ARGS)
         if !isnothing(idx)
             fn_comm = ARGS[idx+1]
             comm = readdlm(fn_comm,Int)
+            @assert isfile(fn_comm) "$fn_comm is not a file"
         else
             no_cols == 2 ? louvain_clust(fn_edges,) : louvain_clust(fn_edges, edges, eweights)
             fn_comm = fn_edges*".ecg"
@@ -139,19 +143,18 @@ function parseargs()
         end
         verbose && println("Done preparing communities.")
 
-        ##############
-        ## Embedding #
-        ##############
+        ###Embedding###
 
         idx = findfirst(==("-e"),ARGS)
         @assert !isnothing(idx) "Embedding file is required"
         fn_embed = ARGS[idx+1]
+        @assert isfile(fn_embed) "$fn_embed is not a file"
 
         # Read embedding
         embedding = []
         try
             embedding = readdlm(fn_embed,Float64)
-        catch 
+        catch
             verbose && println("Embedding in node2vec format. Loading without first line.")
             embedding = readdlm(fn_embed,Float64,skipstart = 1)
         end
@@ -164,19 +167,38 @@ function parseargs()
             verbose && println("Sorting embedding by first column")
             embedding = embedding[sortperm(order),2:end]
         catch
-            
+
         end
         verbose && println("Done preparing embedding.")
 
-        #############
-        ##Landmarks #
-        #############
+        ###Landmarks###
 
         # Transform communities
         clusters = Dict{Any, Vector{Int}}()
 
+        landmarks = -1
         idx = findfirst(==("-l"),ARGS)
-        landmarks = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
+        if !isnothing(idx)
+            try
+                landmarks = parse(Int, ARGS[idx+1])
+            catch
+                landmarks = round(Int,4*sqrt(no_vertices))
+            end
+        end
+        mult = -1
+        idx = findfirst(==("-lpc"),ARGS)
+        if !isnothing(idx)
+            try
+                mult = parse(Int, ARGS[idx+1])
+            catch
+                mult = 4
+            end
+        end
+        landmarks = max(landmarks,mult*maximum(comm))
+        if no_vertices >= 10000 && isnothing(findfirst(==("--force-exact"),ARGS)) && landmarks == -1
+            landmarks = max(round(Int,4*sqrt(no_vertices)),4*maximum(comm))
+            @info "Number of vertices is equal or higher than 10 000. Automatically switching to approximate algortihm with $landmarks landmarks. If you want to force exact algorithm use --force-exact flag."
+        end
         # Provide clusters membership only if generating landmarks
         if landmarks != -1
             for (i, c) in enumerate(comm[:,1])
@@ -195,26 +217,31 @@ function parseargs()
         idx = findfirst(==("--seed"),ARGS)
         seed = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
 
+        idx = findfirst(==("--samples-local"),ARGS)
+        samples = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : 10000
+
         idx = findfirst(==("-m"),ARGS)
         method_str = !isnothing(idx) ? lowercase(strip(ARGS[idx+1])) : "rss"
 
         method = methods[method_str]
-        return edges, eweights, vweight, comm, clusters, embedding, verbose, landmarks, forced, method, directed, no_split, seed
+        return edges, eweights, vweight, comm, clusters, embedding, verbose, landmarks, forced, method, directed, split, seed, samples
     catch e
         showerror(stderr, e)
         println("\n\nUsage:")
-        println("\tjulia CGE_CLI.jl -g graph_edgelist -e embedding [-c communities --seed seed -v -d --no-split -l landmarks -f forced -m method]")
+        println("\tjulia CGE_CLI.jl -g edgelist -e embedding [-c communities] [--seed seed] [--samples-local samples] [-v] [-d] [--split-global] [-l [landmarks]] [-lpc [multiplier]] [--force-exact] [-m method]")
         println("\nParameters:")
-        println("graph_edgelist: rows should contain two vertices ids (edge) and optional weights in third column")
-        println("embedding: rows should contain whitespace separated locations of vertices in embedding")
-        println("communities: rows should contain cluster identifiers of consecutive vertices with optional node ids in first column")
+        println("edgelist: rows should contain two whitespace separated vertices ids (edge) and optional weights in third column")
+        println("embedding: rows should contain whitespace separated embeddings of vertices")
+        println("communities: rows should contain cluster identifiers of vertices with optional vertices ids in the first column")
         println("if no file is given communities are calculated with Louvain algorithm")
         println("seed: RNG seed for local measure sampling")
+        println("samples: no. samples to draw for local score calculation")
         println("-v: flag for debugging messages")
         println("-d: flag for usage of directed framework")
-        println("--no-split: flag for using simple JS divergence (global) score")
-        println("landmarks: required number of landmarks")
-        println("forced: required maximum number of forced splits of a cluster")
+        println("--split-global: flag for using splitted global score; kept for backward compatibility")
+        println("landmarks: required number of landmarks; 4*sqrt(no.vertices) by default")
+        println("multiplier: number of landmarks per community; 4 by default")
+        println("if both 'landmarks' and 'multiplier' are provided the higher value is taken")
         println("method: one of:")
         println("\t* rss:      minimize maximum residual sum of squares when doing a cluster split")
         println("\t* rss2:     minimize maximum residual sum of squares when doing a cluster split (slower)")
