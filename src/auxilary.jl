@@ -183,18 +183,18 @@ function parseargs()
                 landmarks = parse(Int, ARGS[idx+1])
             catch
                 landmarks = round(Int,4*sqrt(no_vertices))
+                @info "Using $landmarks landmarks"
             end
         end
-        mult = -1
-        idx = findfirst(==("-lpc"),ARGS)
+
+        idx = findfirst(==("-f"),ARGS)
         if !isnothing(idx)
-            try
-                mult = parse(Int, ARGS[idx+1])
-            catch
-                mult = 4
-            end
+            forced = parse(Int, ARGS[idx+1])
+            landmarks = landmarks == -1 ? 1 : landmarks
+        else
+            forced = 4
         end
-        landmarks = max(landmarks,mult*maximum(comm))
+
         if no_vertices >= 10000 && isnothing(findfirst(==("--force-exact"),ARGS)) && landmarks == -1
             landmarks = max(round(Int,4*sqrt(no_vertices)),4*maximum(comm))
             @info "Number of vertices is equal or higher than 10 000. Automatically switching to approximate algortihm with $landmarks landmarks. If you want to force exact algorithm use --force-exact flag."
@@ -211,9 +211,6 @@ function parseargs()
             clusters = collect(values(clusters))
         end
 
-        idx = findfirst(==("-f"),ARGS)
-        forced = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
-
         idx = findfirst(==("--seed"),ARGS)
         seed = !isnothing(idx) ? parse(Int, ARGS[idx+1]) : -1
 
@@ -228,7 +225,7 @@ function parseargs()
     catch e
         showerror(stderr, e)
         println("\n\nUsage:")
-        println("\tjulia CGE_CLI.jl -g edgelist -e embedding [-c communities] [--seed seed] [--samples-local samples] [-v] [-d] [--split-global] [-l [landmarks]] [-lpc [multiplier]] [--force-exact] [-m method]")
+        println("\tjulia CGE_CLI.jl -g edgelist -e embedding [-c communities] [--seed seed] [--samples-local samples] [-v] [-d] [--split-global] [-l [landmarks]] [-f [forced]] [--force-exact] [-m method]")
         println("\nParameters:")
         println("edgelist: rows should contain two whitespace separated vertices ids (edge) and optional weights in third column")
         println("embedding: rows should contain whitespace separated embeddings of vertices")
@@ -240,7 +237,7 @@ function parseargs()
         println("-d: flag for usage of directed framework")
         println("--split-global: flag for using splitted global score; kept for backward compatibility")
         println("landmarks: required number of landmarks; 4*sqrt(no.vertices) by default")
-        println("multiplier: number of landmarks per community; 4 by default")
+        println("forced: required number of forced splits of a cluster; 4 by default")
         println("if both 'landmarks' and 'multiplier' are provided the higher value is taken")
         println("method: one of:")
         println("\t* rss:      minimize maximum residual sum of squares when doing a cluster split")

@@ -200,7 +200,11 @@ function wGCL(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
             else
                 ## Random positive cases
                 seed != -1 && Random.seed!(seed)
-                pos = [P[idx(no_vertices,i,j)] for (i,j) in sample(E,auc_samples,replace=true)]
+                for (ind, edge) in enumerate(sample(E,auc_samples,replace=true))
+                    i, j, w = edge
+                    pos[ind] = P[idx(no_vertices,i,j)]
+                    auc_weights[ind] = w
+                end
                 ## Random negative cases
                 seed != -1 && Random.seed!(seed)
                 neg = [P[idx(no_vertices,i,j)] for (i,j) in sample(NE,auc_samples,replace=true)]
@@ -260,7 +264,7 @@ Calculates directed Weighted Geometric Chung-Lu model and divergence score for g
 
 **Arguments**
 * `edges::Array{Int,2}` array with edges definition (two whitespace separated vertices ids)
-* `weights::Vector{Float64}` edges weights
+* `eweights::Vector{Float64}` edges weights
 * `comm::Array{Int,2}` assignment of vertices to communities
 * `embed::Array{Float64,2}` array with vertices embeddings
 * `distances::Vector{Float64}` distances between vertices
@@ -275,7 +279,7 @@ Calculates directed Weighted Geometric Chung-Lu model and divergence score for g
 * `auc_samples::Int` no. samples for local measure score
 * `verbose::Bool` verbose switch, if true prints additional processing information
 """
-function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matrix{Int},
+function wGCL_directed(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
             embed::Matrix{Float64}, distances::Vector{Float64}, vweights::Vector{Float64},
             init_vweights::Vector{Float64}, v_to_l::Vector{Int}, init_edges::Array{Int,2},
             init_eweights::Vector{Float64}, init_embed::Matrix{Float64},
@@ -305,7 +309,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     degree_out = zeros(no_vertices)
     star_check = zeros(Int64,no_vertices)
     for i in 1:no_edges
-        a = weights[i]
+        a = eweights[i]
         v1 = edges[i,1]
         v2 = edges[i,2]
         degree_out[v1]+=a
@@ -337,7 +341,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
     for i in 1:no_edges
         j = comm[edges[i,1]]
         k = comm[edges[i,2]]
-        vect_C[(j-1)*n_parts + k] += weights[i]
+        vect_C[(j-1)*n_parts + k] += eweights[i]
     end
 
     # Indicator - internal to a community
@@ -480,7 +484,7 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
                 seed != -1 && Random.seed!(seed)
                 for (ind, edge) in enumerate(sample(E,auc_samples,replace=true))
                     i, j, w = edge
-                    a, b = extrema(edge)
+                    a, b = extrema((i,j))
                     adj_Tout = Tout[v_to_l[i]]*init_vweights[i]/vweights[v_to_l[i]]
                     adj_Tin = Tin[v_to_l[j]]*init_vweights[j]/vweights[v_to_l[j]]
                     pos[ind] = adj_Tout*adj_Tin*((1-full_graph_D[idx(adj_no_vertices,a,b)])^alpha)
@@ -498,6 +502,11 @@ function wGCL_directed(edges::Array{Int,2}, weights::Vector{Float64}, comm::Matr
             else
                 ## random positive cases
                 seed != -1 && Random.seed!(seed)
+                for (ind, edge) in enumerate(sample(E,auc_samples,replace=true))
+                    i, j, w = edge
+                    pos[ind] = P[no_vertices*(i-1)+j]
+                    auc_weights[ind] = w
+                end
                 pos = [P[no_vertices*(i-1)+j] for (i,j) in sample(E,auc_samples,replace=true)]
                 ## random negative cases
                 seed != -1 && Random.seed!(seed)
