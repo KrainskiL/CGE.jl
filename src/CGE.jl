@@ -2,8 +2,10 @@ module CGE
 
 using DelimitedFiles
 using Statistics
+using StatsBase
 using LinearAlgebra
 using louvain_jll
+using Random
 
 #auxilary
 export parseargs
@@ -13,6 +15,7 @@ export landmarks
 
 #divergence
 export wGCL
+export wGCL_directed
 
 #clustering
 export louvain_clust

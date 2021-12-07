@@ -18,15 +18,18 @@ Julia package to compare graph embeddings.
 
 ## Details of the framework
 
-Presented at [WAW2020](https://math.ryerson.ca/waw2020/) with publication in [Springer LNCS](https://www.springer.com/gp/book/9783030484774).
+Article containing details about 2.0+ release is available in pre-print: [A Multi-purposed Unsupervised Framework for Comparing Embeddings of Undirected and Directed Graphs](https://arxiv.org/abs/2112.00075)
 
-Detailed information can be found in the [paper](https://math.ryerson.ca/~pralat/papers/2020_WAW-Scalable_Embeddings.pdf).
+Additional experiments for undirected framework version based on [ABCD](https://github.com/bkamins/ABCDGraphGenerator.jl) graphs are available in: [Evaluating Node Embeddings of Complex Networks](https://arxiv.org/abs/2102.08275)
+
+There is also paper [A Scalable Unsupervised Framework for
+Comparing Graph Embeddings](https://math.ryerson.ca/~pralat/papers/2020_WAW-Scalable_Embeddings.pdf) presented at [WAW2020](https://math.ryerson.ca/waw2020/) with publication in [Springer LNCS](https://www.springer.com/gp/book/9783030484774).
 
 Framework version without landmarks (written in C) is available under: https://github.com/ftheberge/Comparing_Graph_Embeddings
 
 ## Installation
 
-The current version uses Julia 1.4. Install `CGE.jl` by running Julia, switching to package manager by pressing `]` and running:
+The current version uses Julia 1.6. Install `CGE.jl` by running Julia REPL, switching to package manager by pressing `]` and running:
 ```
 add https://github.com/KrainskiL/CGE.jl
 ```
@@ -39,7 +42,7 @@ using CGE; cd(pwd, joinpath(dirname(pathof(CGE)), "..", "example"))
 ```
 Make sure to copy the CLI file from this location (as it is read only).
 
-Alternatively you can just download CGE_CLI.jl from GitHub repository. It is located in `example/` folder.
+Alternatively you can just download CGE_CLI.jl from GitHub repository - it is located in `example/` folder.
 
 Finally you might also download the whole repository and extract the CGE_CLI.jl file from it.
 ```shell
@@ -48,48 +51,55 @@ mv CGE.jl/example/CGE_CLI.jl .
 julia CGE_CLI.jl
 ```
 
-# Running the code
+## Running the code
 
-Code computes the Jenssen-Shannon divergence between two edge distributions:
-(1) first one is based on the supplied graph clustering
-(2) second one is based on the supplied embedding and a Geometric Chung-Lu model
-When comparing embeddings, lower divergence is better.
+Code computes the global and local score for specified graph, embedding and graph's clustering. The lower score value is the better.
 
 Format:
 
 ```
-julia CGE_CLI.jl -g edgelist_file -e embedding_file [-c clusters_file] [-v] [-l landmarks -f forced -m method]
+julia CGE_CLI.jl -g edgelist -e embedding [-c communities] [--seed seed] [--samples-local samples] [-v] [-d] [--split-global] [-l [landmarks]] [-f [forced]] [--force-exact] [-m method]
 
 ## required flags:
--g: the edgelist (1 per line, whitespace separated, optionally with weights)
--e: the embedding (two formats accepted, see details below)
+-g edgelist: rows should contain two whitespace separated vertices ids (edge) and optional weights in third column
+-e embedding: rows should contain whitespace separated embeddings of vertices
 ## optional flags:
--c: the communities (in vertices order, 1 per line), if not given calculated using Louvain algorithm
--v: verbose, printing additional information
--l: number of landmarks to create
--f: number of forced landmarks to be created
--m: chosen ladnmark creation method: `rss`, `rss2`, `size`, `diamater`
+-c communities: rows should contain cluster identifiers of vertices with optional vertices ids in the first column
+if no file is given communities are calculated with Louvain algorithm
+--seed seed: RNG seed for local measure sampling
+--samples-local samples: no. samples to draw for local score calculation
+-v: flag for debugging messages
+-d: flag for usage of directed framework
+--split-global: flag for using splitted global score; kept for backward compatibility
+-l landmarks: required number of landmarks; 4*sqrt(no.vertices) by default
+-f forced: required number of forced splits of a cluster; 4 by default
+if both 'landmarks' and 'forced' are provided the higher value of landmarks is taken
+--force-exact: landmarks are triggered automatically above 10000 nodes; use this flag to override the behaviour
+-m method: chosen ladnmark creation method: `rss`, `rss2`, `size`, `diameter`
 ```
 
 For instance, while in `example` folder run:
 
 ```julia
-julia CGE_CLI.jl -g 100k.edgelist -c 100k.ecg -e 100k.embedding -l 200 -f 0 -m diameter
+julia ./CGE_CLI.jl -g 10k.edgelist -c 10k.ecg -e 10k.embedding -l 200 --seed 42
 ```
 Result consists of 4 elements:
-1. Best alpha
-2. **Best divergence score**
-3. Best divergence external score
-4. Best divergence internal score
+1. Best alpha for global score
+2. **Best global score**
+3. Best global external score (relevant with --split-global flag)
+4. Best global internal score (relevant with --split-global flag)
+5. Best alpha for local score
+6. **Best local score**
+7. Estimated error of local score
 ```
-[0.25, 0.01483964683262605, 0.026810577776668364, 0.002868715888583737]
+[6.25, 0.002961243353776198, 0.0, 0.0, 9.75, 0.0017000000000000348, 0.000807441501038938]
 ```
 # File Formats
 
 For a graph with `n` nodes, the nodes can be represented with numbers 1 to n or 0 to n-1.
 
 Two input files are required to run the algorithm:
-1. the undirected graph, represented by a sequence of edges, 1 per line and with optional weights in third column
+1. the graph (undirected or directed), represented by a sequence of edges, 1 per line and with optional weights in third column
 2. the node embedding in on of the supported formats (see below)
 
 Additional file with the node's cluster number (1 per line) may be provided. If it's missing communities are calculated automatically with Louvain algorithm.
@@ -98,6 +108,7 @@ Additional file with the node's cluster number (1 per line) may be provided. If 
 
 Nodes can be 0-based or 1-based.
 One edge per line with whitespace between nodes.
+For directed graph edge is directed from the left node to the right node.
 
 ```
 1 32

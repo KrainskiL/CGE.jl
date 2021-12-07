@@ -41,7 +41,7 @@ edges, weights, vweights, comm, clusters, embed, verbose, land, forced, method =
 end
 
 distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
-embed, verbose, land, forced, method);
+embed, verbose, land, forced, method, false);
 
 @testset "landmarks-rss" begin
 
@@ -54,7 +54,7 @@ embed, verbose, land, forced, method);
 end
 
 distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
-embed, verbose, land, forced, CGE.split_cluster_rss2);
+embed, verbose, land, forced, CGE.split_cluster_rss2,false);
 
 @testset "landmarks-rss2" begin
 
@@ -67,7 +67,7 @@ embed, verbose, land, forced, CGE.split_cluster_rss2);
 end
 
 distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
-embed, verbose, land, forced, CGE.split_cluster_size);
+embed, verbose, land, forced, CGE.split_cluster_size,false);
 
 @testset "landmarks-size" begin
 
@@ -79,8 +79,8 @@ embed, verbose, land, forced, CGE.split_cluster_size);
 @test typeof(distances) == Array{Float64,1}
 end
 
-distances, lembed, lcomm, ledges, lweights  = landmarks(edges, weights, vweights, clusters, comm,
-embed, verbose, land, forced, CGE.split_cluster_diameter);
+distances, lembed, lcomm, ledges, lweights, lvweights, v_to_l  = landmarks(edges, weights, vweights, clusters, comm,
+embed, verbose, land, forced, CGE.split_cluster_diameter,false);
 
 @testset "landmarks-diameter" begin
 
@@ -92,7 +92,8 @@ embed, verbose, land, forced, CGE.split_cluster_diameter);
 @test typeof(distances) == Array{Float64,1}
 end
 
-results = wGCL(ledges, lweights, lcomm, lembed, distances, verbose);
+results = wGCL(ledges, lweights, lcomm, lembed, distances, lvweights,
+    Float64[], Int64[], Matrix{Int}(undef,0,0), Float64[],Matrix{Float64}(undef,0,0),false, 42, 10000,verbose);
 
 @testset "wgcl" begin
 

@@ -23,6 +23,7 @@ Divergence
 ----------------------
 ```@docs
 wGCL
+wGCL_directed
 ```
 
 Auxilary
