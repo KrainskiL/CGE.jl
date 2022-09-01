@@ -20,7 +20,7 @@ Julia package to compare graph embeddings.
 
 Article containing details about 2.0+ release is available in pre-print: [A Multi-purposed Unsupervised Framework for Comparing Embeddings of Undirected and Directed Graphs](https://arxiv.org/abs/2112.00075)
 
-Additional experiments for undirected framework version based on [ABCD](https://github.com/bkamins/ABCDGraphGenerator.jl) graphs are available in: [Evaluating Node Embeddings of Complex Networks](https://arxiv.org/abs/2102.08275)
+Additional experiments for undirected framework version based on [ABCD](https://github.com/bkamins/ABCDGraphGenerator.jl) graphs are available in: [Evaluating Node Embeddings of Complex Networks](https://doi.org/10.1093/comnet/cnac030)
 
 There is also paper [A Scalable Unsupervised Framework for
 Comparing Graph Embeddings](https://math.ryerson.ca/~pralat/papers/2020_WAW-Scalable_Embeddings.pdf) presented at [WAW2020](https://math.ryerson.ca/waw2020/) with publication in [Springer LNCS](https://www.springer.com/gp/book/9783030484774).
@@ -50,6 +50,10 @@ git clone https://github.com/KrainskiL/CGE.jl
 mv CGE.jl/example/CGE_CLI.jl .
 julia CGE_CLI.jl
 ```
+
+### Docker instructions
+
+The repository contains `Dockerfile` to build the Docker image locally. The remote image is also available on [Docker Hub](https://hub.docker.com/repository/docker/lukaszkrainski/julia_cge) and is used in a `docker-compose.yaml` file. Running `docker-compose run --rm app bash` will initiate interactive session with `input` and `output` folders mounted in the working directory.
 
 ## Running the code
 
