@@ -104,7 +104,7 @@ end
 
 @testset "clustering" begin
 
-louvain_clust("test.edgelist")
+louvain_clust(0.0, "test.edgelist")
 @test isfile("test.edgelist.ecg")
 isfile("test.edgelist.ecg") && rm("test.edgelist.ecg")
 
