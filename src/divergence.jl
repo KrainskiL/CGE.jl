@@ -235,15 +235,15 @@ function wGCL(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Matrix{Int},
             if !split
                 f = JS(vect_C, vect_B, Bool[], true)
             else
-                x = JS(vect_C, vect_B, vect_I, true)
-                y = JS(vect_C, vect_B, vect_I, false)
-                f = (x+y)/2.0
+                div_int = JS(vect_C, vect_B, vect_I, true)
+                div_ext = JS(vect_C, vect_B, vect_I, false)
+                f = (div_int+div_ext)/2.0
             end
             if f < best_div
                 best_div = f
                 best_alpha = alpha
-                best_div_ext = !split ? 0.0 : x
-                best_div_int = !split ? 0.0 : y
+                best_div_ext = !split ? 0.0 : div_ext
+                best_div_int = !split ? 0.0 : div_int
                 alpha_div_counter = 5
             else
                 alpha_div_counter -= 1
@@ -539,15 +539,15 @@ function wGCL_directed(edges::Array{Int,2}, eweights::Vector{Float64}, comm::Mat
             if !split
                 f = JS(vect_C, vect_B, Bool[], true)
             else
-                x = JS(vect_C, vect_B, vect_I, true)
-                y = JS(vect_C, vect_B, vect_I, false)
-                f = (x+y)/2.0
+                div_int = JS(vect_C, vect_B, vect_I, true)
+                div_ext = JS(vect_C, vect_B, vect_I, false)
+                f = (div_int+div_ext)/2.0
             end
             if f < best_div
                 best_div = f
                 best_alpha = alpha
-                best_div_ext = !split ? 0.0 : x
-                best_div_int = !split ? 0.0 : y
+                best_div_ext = !split ? 0.0 : div_ext
+                best_div_int = !split ? 0.0 : div_int
                 alpha_div_counter = 5
             else
                 alpha_div_counter -= 1

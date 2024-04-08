@@ -65,7 +65,7 @@ function parseargs()
         "rss2" => split_cluster_rss2,
         "size" => split_cluster_size,
         "diameter" => split_cluster_diameter)
-    # try
+    try
         ###Flags###
 
         # Check if calculations should be verbose
@@ -218,30 +218,30 @@ function parseargs()
 
         method = methods[method_str]
         return edges, eweights, vweight, comm, clusters, embedding, verbose, landmarks, forced, method, directed, split, seed, samples
-    # catch e
-    #     showerror(stderr, e)
-    #     println("\n\nUsage:")
-    #     println("\tjulia CGE_CLI.jl -g edgelist -e embedding [-c communities] [--seed seed] [--samples-local samples] [-v] [-d] [--split-global] [-l [landmarks]] [-f [forced]] [--force-exact] [-m method]")
-    #     println("\nParameters:")
-    #     println("edgelist: rows should contain two whitespace separated vertices ids (edge) and optional weights in third column")
-    #     println("embedding: rows should contain whitespace separated embeddings of vertices")
-    #     println("communities: rows should contain cluster identifiers of vertices with optional vertices ids in the first column")
-    #     println("if no file is given communities are calculated with Louvain algorithm")
-    #     println("seed: RNG seed for local measure sampling")
-    #     println("samples: no. samples to draw for local score calculation")
-    #     println("-v: flag for debugging messages")
-    #     println("-d: flag for usage of directed framework")
-    #     println("--split-global: flag for using splitted global score; kept for backward compatibility")
-    #     println("landmarks: required number of landmarks; 4*sqrt(no.vertices) by default")
-    #     println("forced: required number of forced splits of a cluster; 4 by default")
-    #     println("if both 'landmarks' and 'multiplier' are provided the higher value is taken")
-    #     println("method: one of:")
-    #     println("\t* rss:      minimize maximum residual sum of squares when doing a cluster split")
-    #     println("\t* rss2:     minimize maximum residual sum of squares when doing a cluster split (slower)")
-    #     println("\t* size:     make clusters have approximately the same size after a cluster split")
-    #     println("\t* diameter: make clusters have approximately the same diameter along first " *
-    #             "principal component after a cluster split")
-    #     println("(note that always a cluster with largest residual sum of squares is selected for splitting)")
-    #     exit(1)
-    # end
+    catch e
+        showerror(stderr, e)
+        println("\n\nUsage:")
+        println("\tjulia CGE_CLI.jl -g edgelist -e embedding [-c communities] [--seed seed] [--samples-local samples] [-v] [-d] [--split-global] [-l [landmarks]] [-f [forced]] [--force-exact] [-m method]")
+        println("\nParameters:")
+        println("edgelist: rows should contain two whitespace separated vertices ids (edge) and optional weights in third column")
+        println("embedding: rows should contain whitespace separated embeddings of vertices")
+        println("communities: rows should contain cluster identifiers of vertices with optional vertices ids in the first column")
+        println("if no file is given communities are calculated with Louvain algorithm")
+        println("seed: RNG seed for local measure sampling")
+        println("samples: no. samples to draw for local score calculation")
+        println("-v: flag for debugging messages")
+        println("-d: flag for usage of directed framework")
+        println("--split-global: flag for using splitted global score; kept for backward compatibility")
+        println("landmarks: required number of landmarks; 4*sqrt(no.vertices) by default")
+        println("forced: required number of forced splits of a cluster; 4 by default")
+        println("if both 'landmarks' and 'multiplier' are provided the higher value is taken")
+        println("method: one of:")
+        println("\t* rss:      minimize maximum residual sum of squares when doing a cluster split")
+        println("\t* rss2:     minimize maximum residual sum of squares when doing a cluster split (slower)")
+        println("\t* size:     make clusters have approximately the same size after a cluster split")
+        println("\t* diameter: make clusters have approximately the same diameter along first " *
+                "principal component after a cluster split")
+        println("(note that always a cluster with largest residual sum of squares is selected for splitting)")
+        exit(1)
+    end
 end
